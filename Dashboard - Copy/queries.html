@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Queries - BIT TeamHub</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shell.js"></script>
+  <style>
+    .query-layout {
+      display: grid;
+      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+      gap: 20px;
+    }
+
+    .query-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .query-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      cursor: pointer;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+
+    .query-card:hover {
+      border-color: var(--border2);
+      transform: translateY(-1px);
+    }
+
+    .query-card.active {
+      border-color: var(--green);
+      background: var(--card2);
+    }
+
+    .query-card.unread {
+      border-left: 3px solid var(--green);
+    }
+
+    .qc-header {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+
+    .qc-title {
+      font-weight: 600;
+      font-size: 0.88rem;
+      margin-bottom: 4px;
+    }
+
+    .qc-preview {
+      font-size: 0.78rem;
+      color: var(--text2);
+      line-height: 1.5;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .qc-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .qc-meta .time {
+      font-size: 0.68rem;
+      color: var(--text3);
+      margin-left: auto;
+    }
+
+    .query-detail {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: calc(100vh - var(--topbar-h) - 180px);
+      min-width: 0;
+    }
+
+    .qd-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: var(--text3);
+      gap: 12px;
+      font-size: 0.88rem;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .qd-empty i {
+      font-size: 2rem;
+      color: var(--text3);
+    }
+
+    .qd-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .qd-title {
+      font-family: Syne, sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      margin-bottom: 6px;
+    }
+
+    .qd-meta {
+      font-size: 0.75rem;
+      color: var(--text2);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .qd-banner {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(92,154,255,.1);
+      color: var(--blue);
+      font-size: 0.78rem;
+      border: 1px solid rgba(92,154,255,.18);
+    }
+
+    .qd-banner.closed {
+      background: rgba(255,171,64,.08);
+      color: var(--orange);
+      border-color: rgba(255,171,64,.18);
+    }
+
+    .qd-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .qd-msg {
+      background: var(--bg3);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .qd-msg.admin-reply {
+      background: var(--green-dim);
+      border: 1px solid var(--green-glow);
+    }
+
+    .qd-msg .qm-from {
+      font-size: 0.72rem;
+      color: var(--text3);
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .qd-msg.admin-reply .qm-from { color: var(--green); }
+
+    .qd-reply-wrap {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .qd-reply-wrap textarea {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      resize: vertical;
+      min-height: 84px;
+      transition: border-color 0.2s;
+    }
+
+    .qd-reply-wrap textarea:focus { border-color: var(--green); }
+    .close-btn-wrap { display: flex; flex-direction: column; gap: 6px; }
+
+    .new-query-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 2px;
+      background: var(--bg3);
+      border-radius: 10px;
+      padding: 3px;
+      margin-bottom: 16px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--text2);
+      font-size: 0.82rem;
+      font-weight: 600;
+      transition: all 0.18s;
+    }
+
+    .tab-btn.active {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    }
+
+    @media (max-width: 1024px) {
+      .query-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .query-detail {
+        min-height: 520px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    let myData = null;
+    let allQueries = [];
+    let selectedQueryId = "";
+    let activeStatusFilter = "open";
+    let detailUnsub = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      myData = await Shell.init({ page: "queries", title: "Queries" });
+      if (!myData) return;
+
+      selectedQueryId = localStorage.getItem(getSelectionKey()) || "";
+      renderPage();
+      subscribeQueries();
+    });
+
+    function renderPage() {
+      const body = document.getElementById("pageBody");
+      const isAdmin = Shell._isAdmin;
+
+      body.innerHTML = `
+        <div class="page-header">
+          <h1>Queries</h1>
+          <p>${isAdmin ? "Review, reply to, and close member queries." : "Ask the admin team anything and track the full reply status here."}</p>
+        </div>
+
+        ${!isAdmin ? `
+          <div class="new-query-card">
+            <div class="card-title mb-4">Submit a Query</div>
+            <div class="form-group">
+              <label>Subject</label>
+              <input type="text" class="form-control" id="qSubject" placeholder="Brief title for your query...">
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <textarea class="form-control" id="qBody" placeholder="Describe your question or issue in detail..." rows="4"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+              <button class="btn btn-primary" id="submitQueryBtn"><i class="fas fa-paper-plane"></i> Submit Query</button>
+              <span style="font-size:.75rem;color:var(--text2);">Replies and status changes will stay visible here even after reload.</span>
+            </div>
+          </div>
+        ` : ""}
+
+        <div class="query-layout">
+          <div>
+            ${isAdmin ? `
+              <div class="tabs">
+                <button class="tab-btn active" data-status="open">Open</button>
+                <button class="tab-btn" data-status="closed">Closed</button>
+                <button class="tab-btn" data-status="all">All</button>
+              </div>
+            ` : ""}
+            <div class="query-list" id="queryList"><div class="text-muted text-sm">Loading...</div></div>
+          </div>
+          <div class="query-detail" id="queryDetail">
+            <div class="qd-empty">
+              <i class="fas fa-circle-question"></i>
+              <span>Select a query to view its full status and conversation.</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      if (!isAdmin) {
+        document.getElementById("submitQueryBtn").addEventListener("click", submitQuery);
+      } else {
+        document.querySelectorAll(".tab-btn").forEach(button => {
+          button.addEventListener("click", () => {
+            document.querySelectorAll(".tab-btn").forEach(item => item.classList.remove("active"));
+            button.classList.add("active");
+            activeStatusFilter = button.dataset.status;
+            renderQueryList();
+          });
+        });
+      }
+    }
+
+    function subscribeQueries() {
+      db.collection("queries").onSnapshot(
+        snap => {
+          const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const mineOrAll = Shell._isAdmin
+            ? docs
+            : docs.filter(query => query.uid === myData.uid);
+
+          allQueries = sortByCreatedAtDesc(
+            mineOrAll.map(query => ({ ...query, updatedAt: query.updatedAt || query.createdAt })),
+            "updatedAt"
+          );
+
+          renderQueryList();
+          restoreSelection();
+        },
+        error => {
+          document.getElementById("queryList").innerHTML = `<div class="text-muted text-sm">${escapeHtmlText(readableError(error))}</div>`;
+        }
+      );
+    }
+
+    async function submitQuery() {
+      const subject = document.getElementById("qSubject").value.trim();
+      const body = document.getElementById("qBody").value.trim();
+
+      if (!subject || !body) {
+        toast("Please fill in both the subject and description.", "error");
+        return;
+      }
+
+      try {
+        const ref = await db.collection("queries").add({
+          subject,
+          body,
+          uid: myData.uid,
+          userName: getDisplayName(myData),
+          email: myData.email,
+          status: "open",
+          hasNewReply: false,
+          replies: [],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await logActivity({
+          type: "query",
+          text: `submitted the query "${subject}"`,
+          user: myData,
+          extra: { queryId: ref.id }
+        });
+
+        document.getElementById("qSubject").value = "";
+        document.getElementById("qBody").value = "";
+        selectedQueryId = ref.id;
+        persistSelection();
+        toast("Query submitted.", "success");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    function getVisibleQueries() {
+      if (!Shell._isAdmin) return [...allQueries];
+      if (activeStatusFilter === "all") return [...allQueries];
+      return allQueries.filter(query => (query.status || "open") === activeStatusFilter);
+    }
+
+    function renderQueryList() {
+      const list = document.getElementById("queryList");
+      if (!list) return;
+
+      const queries = getVisibleQueries();
+      if (!queries.length) {
+        list.innerHTML = '<div class="text-muted text-sm">No queries found.</div>';
+        return;
+      }
+
+      list.innerHTML = queries.map(query => {
+        const replies = sortByCreatedAtAsc(query.replies || [], "createdAt");
+        const lastReply = replies[replies.length - 1];
+        const preview = lastReply?.text || query.body || "";
+
+        return `
+          <div class="query-card ${query.hasNewReply && !Shell._isAdmin ? "unread" : ""} ${selectedQueryId === query.id ? "active" : ""}" onclick="selectQuery('${query.id}')">
+            <div class="qc-header">
+              <div>${Shell._isAdmin ? avatar({ displayName: query.userName, email: query.email }, 34) : ""}</div>
+              <div style="flex:1;min-width:0;">
+                <div class="qc-title">${escapeHtmlText(query.subject || "Untitled query")}</div>
+                <div class="qc-preview">${escapeHtmlText(preview)}</div>
+              </div>
+            </div>
+            <div class="qc-meta">
+              <span class="badge ${query.status === "closed" ? "badge-blue" : "badge-green"}">${escapeHtmlText(query.status || "open")}</span>
+              ${Shell._isAdmin ? `<span style="font-size:.72rem;color:var(--text2);">by ${escapeHtmlText(query.userName || "Unknown")}</span>` : ""}
+              ${(query.replies || []).length ? `<span style="font-size:.72rem;color:var(--text2);">${(query.replies || []).length} replies</span>` : ""}
+              ${query.hasNewReply && !Shell._isAdmin ? '<span class="badge badge-green">New reply</span>' : ""}
+              <span class="time">${timeAgo(query.updatedAt || query.createdAt)}</span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function restoreSelection() {
+      const visibleIds = new Set(getVisibleQueries().map(query => query.id));
+      if (selectedQueryId && visibleIds.has(selectedQueryId)) {
+        subscribeToDetail(selectedQueryId);
+        return;
+      }
+
+      if (!visibleIds.size) {
+        clearDetail();
+        return;
+      }
+
+      selectedQueryId = getVisibleQueries()[0].id;
+      persistSelection();
+      subscribeToDetail(selectedQueryId);
+    }
+
+    function selectQuery(id) {
+      selectedQueryId = id;
+      persistSelection();
+      renderQueryList();
+      subscribeToDetail(id);
+    }
+
+    function subscribeToDetail(id) {
+      if (!id) return;
+      if (detailUnsub) detailUnsub();
+
+      detailUnsub = db.collection("queries").doc(id).onSnapshot(async snap => {
+        if (!snap.exists) {
+          clearDetail();
+          return;
+        }
+
+        const query = { id: snap.id, ...snap.data() };
+        renderQueryDetail(query);
+
+        if (!Shell._isAdmin && query.hasNewReply) {
+          await db.collection("queries").doc(id).update({
+            hasNewReply: false
+          }).catch(() => {});
+        }
+      });
+    }
+
+    function renderQueryDetail(query) {
+      const pane = document.getElementById("queryDetail");
+      if (!pane) return;
+
+      const replies = sortByCreatedAtAsc(query.replies || [], "createdAt");
+      const status = query.status || "open";
+      const closedLabel = query.closedAt
+        ? `Closed ${formatTime(query.closedAt)}`
+        : "Closed by admin";
+
+      pane.innerHTML = `
+        <div class="qd-header">
+          <div class="qd-title">${escapeHtmlText(query.subject || "Untitled query")}</div>
+          <div class="qd-meta">
+            <span class="badge ${status === "closed" ? "badge-blue" : "badge-green"}">${escapeHtmlText(status)}</span>
+            <span>by ${escapeHtmlText(query.userName || "Unknown")}</span>
+            <span>${formatTime(query.updatedAt || query.createdAt)}</span>
+          </div>
+          <div class="qd-banner ${status === "closed" ? "closed" : ""}">
+            ${status === "closed"
+              ? `${escapeHtmlText(closedLabel)}${query.closedByName ? ` by ${escapeHtmlText(query.closedByName)}` : ""}.`
+              : "This query is open. Replies below stay visible for both admins and members."}
+          </div>
+        </div>
+        <div class="qd-messages" id="qdMsgs">
+          <div class="qd-msg">
+            <div class="qm-from"><i class="fas fa-user"></i> ${escapeHtmlText(query.userName || "Unknown")} · Original query · ${timeAgo(query.createdAt)}</div>
+            ${escapeHtmlText(query.body || "")}
+          </div>
+          ${replies.map(reply => `
+            <div class="qd-msg ${reply.isAdmin ? "admin-reply" : ""}">
+              <div class="qm-from">
+                ${reply.isAdmin ? '<i class="fas fa-shield-halved"></i>' : '<i class="fas fa-user"></i>'}
+                ${escapeHtmlText(reply.isAdmin ? (reply.name || "Admin") : (reply.name || "Member"))}
+                · ${timeAgo(reply.createdAt)}
+              </div>
+              ${escapeHtmlText(reply.text || "")}
+            </div>
+          `).join("")}
+        </div>
+        ${status === "open"
+          ? `
+            <div class="qd-reply-wrap">
+              <textarea id="replyInput" placeholder="${Shell._isAdmin ? "Write admin reply..." : "Add more details for the admin..."}"></textarea>
+              <div class="close-btn-wrap">
+                <button class="btn btn-primary btn-sm" onclick="sendReply('${query.id}')"><i class="fas fa-paper-plane"></i></button>
+                ${Shell._isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="closeQuery('${query.id}')">Close</button>` : ""}
+              </div>
+            </div>
+          `
+          : `
+            <div style="padding:12px 16px;font-size:.8rem;color:var(--text3);border-top:1px solid var(--border)">
+              This query is closed. The full reply history remains visible here.
+            </div>
+          `}
+      `;
+    }
+
+    function clearDetail() {
+      const pane = document.getElementById("queryDetail");
+      if (!pane) return;
+      pane.innerHTML = `
+        <div class="qd-empty">
+          <i class="fas fa-circle-question"></i>
+          <span>Select a query to view its full status and conversation.</span>
+        </div>
+      `;
+    }
+
+    async function sendReply(id) {
+      const input = document.getElementById("replyInput");
+      const text = input?.value.trim();
+      if (!text) return;
+
+      const reply = {
+        text,
+        isAdmin: Shell._isAdmin,
+        name: getDisplayName(myData),
+        uid: myData.uid,
+        createdAt: new Date().toISOString()
+      };
+
+      try {
+        await db.collection("queries").doc(id).update({
+          replies: firebase.firestore.FieldValue.arrayUnion(reply),
+          hasNewReply: Shell._isAdmin,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await logActivity({
+          type: "query",
+          text: `${Shell._isAdmin ? "replied to" : "updated"} a query`,
+          user: myData,
+          extra: { queryId: id }
+        });
+
+        input.value = "";
+        toast("Reply sent.", "success");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function closeQuery(id) {
+      if (!confirm("Mark this query as closed?")) return;
+
+      try {
+        await db.collection("queries").doc(id).update({
+          status: "closed",
+          hasNewReply: true,
+          closedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          closedByUid: myData.uid,
+          closedByName: getDisplayName(myData),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await logActivity({
+          type: "query",
+          text: "closed a query",
+          user: myData,
+          extra: { queryId: id }
+        });
+
+        toast("Query closed.", "info");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    function getSelectionKey() {
+      return `teamhub_query_selection_${myData?.uid || "guest"}`;
+    }
+
+    function persistSelection() {
+      localStorage.setItem(getSelectionKey(), selectedQueryId || "");
+    }
+  </script>
+</body>
+</html>

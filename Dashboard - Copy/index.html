@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BIT TeamHub — Sign In</title>
+<link rel="stylesheet" href="style.css">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<style>
+body { background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+
+.login-wrap {
+  width: 100%;
+  max-width: 440px;
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--card);
+  border: 1px solid var(--border2);
+  border-radius: 22px;
+  padding: 40px 36px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.5);
+  animation: fadeInUp .45s ease both;
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.login-logo .logo-icon {
+  width: 46px; height: 46px;
+  background: var(--green);
+  border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 28px var(--green-glow);
+}
+.login-logo .logo-icon i { color: #0b0e15; font-size: 1.2rem; }
+.login-logo .wordmark {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.4rem;
+  letter-spacing: -.5px;
+}
+.login-logo .wordmark span { color: var(--green); }
+
+h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -.8px;
+  margin-bottom: 8px;
+}
+.subtitle { color: var(--text2); font-size: .9rem; margin-bottom: 34px; line-height: 1.5; }
+.subtitle em { color: var(--green); font-style: normal; font-weight: 600; }
+
+.google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 20px;
+  background: var(--bg3);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: .95rem;
+  font-weight: 600;
+  transition: all .22s;
+}
+.google-btn:hover {
+  background: var(--card2);
+  border-color: var(--green);
+  box-shadow: 0 0 22px var(--green-glow);
+  transform: translateY(-1px);
+}
+.google-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+
+.divider { display: flex; align-items: center; gap: 12px; margin: 24px 0; color: var(--text3); font-size: .78rem; }
+.divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.info-box {
+  background: var(--green-dim);
+  border: 1px solid var(--green-glow);
+  border-radius: 10px;
+  padding: 13px 16px;
+  font-size: .8rem;
+  color: var(--text2);
+  display: flex;
+  gap: 10px;
+}
+.info-box i { color: var(--green); margin-top: 1px; flex-shrink: 0; }
+
+.error-msg {
+  background: rgba(255,82,82,.1);
+  border: 1px solid rgba(255,82,82,.2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: .83rem;
+  color: var(--red);
+  margin-top: 16px;
+  display: none;
+}
+
+/* floating orbs */
+.orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: .18;
+  pointer-events: none;
+  z-index: 0;
+}
+.orb-1 { width:350px;height:350px; background:var(--green); top:-80px; right:-80px; animation: float 8s ease-in-out infinite; }
+.orb-2 { width:280px;height:280px; background:var(--blue); bottom:-60px; left:-60px; animation: float 10s ease-in-out infinite reverse; }
+@keyframes float { 0%,100%{transform:translate(0,0)} 50%{transform:translate(20px,20px)} }
+
+.login-card { position: relative; z-index: 1; }
+</style>
+</head>
+<body>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon"><i class="fas fa-bolt"></i></div>
+      <div class="wordmark">BIT <span>TeamHub</span></div>
+    </div>
+
+    <h1>Welcome back 👋</h1>
+    <p class="subtitle">Your team's central hub for activity, progress, and collaboration.<br>Sign in with your <em>@bitsathy.ac.in</em> account to continue.</p>
+
+    <button class="google-btn" id="googleBtn">
+      <!-- Google G logo -->
+      <svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.3 0 24 0 14.7 0 6.7 5.5 2.7 13.5l7.9 6.1C12.5 13.3 17.8 9.5 24 9.5z"/>
+        <path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.9 7.2l7.6 5.9c4.5-4.1 7.1-10.2 7.1-17.1z"/>
+        <path fill="#FBBC05" d="M10.6 28.4A14.6 14.6 0 0 1 9.5 24c0-1.5.2-3 .6-4.4L2.2 13.5A24 24 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.1-6.2z"/>
+        <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.5-4.9 2.3-8.3 2.3-6.2 0-11.5-3.8-13.5-9.2l-8 6.2C6.7 42.5 14.7 48 24 48z"/>
+        <path fill="none" d="M0 0h48v48H0z"/>
+      </svg>
+      Continue with Google
+    </button>
+
+    <div id="errorMsg" class="error-msg"></div>
+
+    <div class="divider">only for BIT Sathy members</div>
+
+    <div class="info-box">
+      <i class="fas fa-shield-halved"></i>
+      <span>Access restricted to <strong>@bitsathy.ac.in</strong> email addresses. Your data is securely stored and managed by your team admins.</span>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// redirect if already logged in
+auth.onAuthStateChanged(u => { if (u) window.location.href = 'dashboard.html'; });
+
+document.getElementById('googleBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('googleBtn');
+  const err = document.getElementById('errorMsg');
+  err.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Signing in…';
+
+  try {
+    const result = await auth.signInWithPopup(provider);
+    const email  = result.user.email;
+
+    if (!email.endsWith('@bitsathy.ac.in')) {
+      await auth.signOut();
+      err.textContent = '⚠ Only @bitsathy.ac.in accounts are allowed. Please use your college email.';
+      err.style.display = 'block';
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.3 0 24 0 14.7 0 6.7 5.5 2.7 13.5l7.9 6.1C12.5 13.3 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.9 7.2l7.6 5.9c4.5-4.1 7.1-10.2 7.1-17.1z"/><path fill="#FBBC05" d="M10.6 28.4A14.6 14.6 0 0 1 9.5 24c0-1.5.2-3 .6-4.4L2.2 13.5A24 24 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.1-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.5-4.9 2.3-8.3 2.3-6.2 0-11.5-3.8-13.5-9.2l-8 6.2C6.7 42.5 14.7 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg> Continue with Google';
+      return;
+    }
+
+    await getOrCreateUser(result.user);
+    window.location.href = 'dashboard.html';
+  } catch (e) {
+    console.error(e);
+    err.textContent = e.message || 'Sign-in failed. Please try again.';
+    err.style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.2l6.8-6.8C35.8 2.4 30.3 0 24 0 14.7 0 6.7 5.5 2.7 13.5l7.9 6.1C12.5 13.3 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.9 7.2l7.6 5.9c4.5-4.1 7.1-10.2 7.1-17.1z"/><path fill="#FBBC05" d="M10.6 28.4A14.6 14.6 0 0 1 9.5 24c0-1.5.2-3 .6-4.4L2.2 13.5A24 24 0 0 0 0 24c0 3.8.9 7.4 2.5 10.6l8.1-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.5-4.9 2.3-8.3 2.3-6.2 0-11.5-3.8-13.5-9.2l-8 6.2C6.7 42.5 14.7 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg> Continue with Google';
+  }
+});
+</script>
+</body>
+</html>

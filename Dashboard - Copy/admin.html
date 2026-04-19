@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Admin Panel - BIT TeamHub</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shell.js"></script>
+  <style>
+    .admin-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 22px;
+      gap: 2px;
+      flex-wrap: wrap;
+    }
+
+    .admin-tab {
+      padding: 10px 18px;
+      border: none;
+      background: transparent;
+      color: var(--text2);
+      font-size: 0.85rem;
+      font-weight: 600;
+      position: relative;
+      transition: color 0.18s;
+    }
+
+    .admin-tab.active { color: var(--green); }
+    .admin-tab.active::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      background: var(--green);
+      border-radius: 2px;
+    }
+
+    .admin-tab:hover:not(.active) { color: var(--text); }
+
+    .member-row {
+      display: grid;
+      grid-template-columns: 1.9fr 1.3fr 1fr 0.9fr 0.9fr 1.3fr;
+      align-items: center;
+      gap: 10px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.84rem;
+      transition: background 0.15s;
+    }
+
+    .member-row:last-child { border-bottom: none; }
+    .member-row:hover { background: rgba(255, 255, 255, 0.02); }
+    .member-row.header {
+      background: var(--bg3);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text3);
+    }
+
+    .member-row .name-cell {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .pt-input {
+      width: 70px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      color: var(--text);
+      font-size: 0.8rem;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.18s;
+    }
+
+    .pt-input:focus { border-color: var(--green); }
+    .action-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .ov-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+
+    .ov-val {
+      font-family: Syne, sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+    }
+
+    .ov-lbl {
+      font-size: 0.78rem;
+      color: var(--text2);
+      margin-top: 2px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .detail-item .dl {
+      font-size: 0.7rem;
+      color: var(--text3);
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .detail-item .dv { font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+  <script>
+    let meAdmin = null;
+    let allMembers = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      meAdmin = await Shell.init({ page: "admin", title: "Admin Panel", adminOnly: true });
+      if (!meAdmin) return;
+      renderShell();
+      loadOverview();
+    });
+
+    function renderShell() {
+      const body = document.getElementById("pageBody");
+      body.innerHTML = `
+        <div class="page-header">
+          <h1>Admin Panel</h1>
+          <p>Oversee members, manage points, review daily activity, and handle queries.</p>
+        </div>
+        <div class="admin-tabs">
+          <button class="admin-tab active" onclick="switchTab('overview', this)">Overview</button>
+          <button class="admin-tab" onclick="switchTab('members', this)">Members & Points</button>
+          <button class="admin-tab" onclick="switchTab('queries', this)">Queries</button>
+          <button class="admin-tab" onclick="switchTab('activity', this)">Daily Activity</button>
+        </div>
+        <div id="tabContent"></div>
+      `;
+    }
+
+    function switchTab(tab, button) {
+      document.querySelectorAll(".admin-tab").forEach(item => item.classList.remove("active"));
+      button.classList.add("active");
+
+      if (tab === "overview") loadOverview();
+      if (tab === "members") loadMembersTab();
+      if (tab === "queries") loadQueriesTab();
+      if (tab === "activity") loadActivityTab();
+    }
+
+    async function loadOverview() {
+      const container = document.getElementById("tabContent");
+      container.innerHTML = '<div class="text-muted text-sm">Loading...</div>';
+
+      const [userSnap, querySnap, chatSnap, taskSnap, lcSnap] = await Promise.all([
+        db.collection("users").get(),
+        db.collection("queries").get(),
+        db.collection("chat_messages").get(),
+        db.collection("tasks").get(),
+        db.collection("lc_entries").get()
+      ]);
+
+      const users = activeUsersOnly(userSnap.docs.map(doc => doc.data()));
+      const queries = querySnap.docs.map(doc => doc.data());
+      const tasks = taskSnap.docs.map(doc => doc.data());
+      const lcEntries = lcSnap.docs.map(doc => doc.data());
+      const chats = chatSnap.docs.map(doc => doc.data());
+
+      let totalActivity = 0;
+      let totalReward = 0;
+      let adminCount = 0;
+      const deptMap = {};
+
+      users.forEach(user => {
+        totalActivity += user.activityPoints || 0;
+        totalReward += user.rewardPoints || 0;
+        if (user.role === "admin") adminCount += 1;
+        if (user.department) deptMap[user.department] = (deptMap[user.department] || 0) + 1;
+      });
+
+      container.innerHTML = `
+        <div class="overview-grid">
+          <div class="ov-card"><div class="ov-val">${users.length}</div><div class="ov-lbl">Active Members</div></div>
+          <div class="ov-card"><div class="ov-val" style="color:var(--orange)">${adminCount}</div><div class="ov-lbl">Admins</div></div>
+          <div class="ov-card"><div class="ov-val" style="color:var(--green)">${totalActivity}</div><div class="ov-lbl">Total Activity Points</div></div>
+          <div class="ov-card"><div class="ov-val" style="color:var(--blue)">${totalReward}</div><div class="ov-lbl">Total Reward Points</div></div>
+          <div class="ov-card"><div class="ov-val">${queries.filter(query => query.status !== "closed").length}</div><div class="ov-lbl">Open Queries</div></div>
+          <div class="ov-card"><div class="ov-val">${tasks.length}</div><div class="ov-lbl">Tasks</div></div>
+          <div class="ov-card"><div class="ov-val">${lcEntries.length}</div><div class="ov-lbl">Learning Center Files</div></div>
+          <div class="ov-card"><div class="ov-val">${chats.length}</div><div class="ov-lbl">Chat Messages</div></div>
+        </div>
+
+        <div class="two-col">
+          <div class="card">
+            <div class="card-title mb-4">Department Breakdown</div>
+            ${Object.keys(deptMap).length
+              ? Object.entries(deptMap).sort((a, b) => b[1] - a[1]).map(([department, count]) => `
+                  <div class="progress-row">
+                    <div class="progress-label"><span>${escapeHtmlText(department)}</span><span>${count}</span></div>
+                    <div class="progress-track"><div class="progress-fill" style="width:${Math.round((count / users.length) * 100)}%"></div></div>
+                  </div>
+                `).join("")
+              : '<div class="text-muted text-sm">No department data yet.</div>'}
+          </div>
+
+          <div class="card">
+            <div class="card-title mb-4">Bulk Actions</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;gap:10px;align-items:center;">
+                <input type="number" id="bulkAmt" class="form-control" placeholder="Points amount" style="flex:1">
+                <select id="bulkType" class="form-control" style="width:140px">
+                  <option value="activityPoints">Activity</option>
+                  <option value="rewardPoints">Reward</option>
+                </select>
+              </div>
+              <button class="btn btn-primary w-full" onclick="bulkAddPoints()"><i class="fas fa-bolt"></i> Award to All Members</button>
+              <a href="tasks.html" class="btn btn-ghost w-full"><i class="fas fa-list-check"></i> Open Tasks</a>
+              <p style="font-size:.72rem;color:var(--text2);">Daily activity clears automatically every day. Removed members are excluded from all counts.</p>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async function loadMembersTab() {
+      const container = document.getElementById("tabContent");
+      container.innerHTML = '<div class="text-muted text-sm">Loading...</div>';
+
+      const snap = await db.collection("users").get();
+      allMembers = activeUsersOnly(snap.docs.map(doc => doc.data()))
+        .sort((a, b) => (b.activityPoints || 0) - (a.activityPoints || 0));
+
+      container.innerHTML = `
+        <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <input type="text" class="form-control" id="memberSearch" placeholder="Search members..." style="max-width:260px;" oninput="filterMembers()">
+          <span style="font-size:.82rem;color:var(--text2);align-self:center;">${allMembers.length} active members</span>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div class="member-row header">
+            <div>Member</div><div>Email</div><div>Dept / Year</div><div>Activity</div><div>Reward</div><div>Actions</div>
+          </div>
+          <div id="memberRows"></div>
+        </div>
+      `;
+
+      renderMemberRows(allMembers);
+    }
+
+    function filterMembers() {
+      const query = document.getElementById("memberSearch")?.value.toLowerCase().trim() || "";
+      const members = query
+        ? allMembers.filter(member => {
+            return getDisplayName(member).toLowerCase().includes(query) || (member.email || "").toLowerCase().includes(query);
+          })
+        : allMembers;
+      renderMemberRows(members);
+    }
+
+    function renderMemberRows(members) {
+      const rows = document.getElementById("memberRows");
+      if (!rows) return;
+
+      rows.innerHTML = members.map(member => `
+        <div class="member-row">
+          <div class="name-cell">
+            ${avatar(member, 32)}
+            <div>
+              <div style="font-weight:600;font-size:.83rem;">${escapeHtmlText(getDisplayName(member))}</div>
+              <div style="font-size:.68rem;color:var(--text3)">${member.role === "admin" ? "Admin" : "Member"}</div>
+            </div>
+          </div>
+          <div style="font-size:.75rem;color:var(--text2);word-break:break-all;">${escapeHtmlText(member.email || "")}</div>
+          <div style="font-size:.78rem">${member.department ? escapeHtmlText(member.department) : "-"} ${member.year ? `/ Y${escapeHtmlText(member.year)}` : ""}</div>
+          <div><input type="number" class="pt-input" value="${member.activityPoints || 0}" id="ap_${member.uid}" min="0"></div>
+          <div><input type="number" class="pt-input" value="${member.rewardPoints || 0}" id="rp_${member.uid}" min="0"></div>
+          <div class="action-btns">
+            <button class="btn btn-sm btn-primary" onclick="savePoints('${member.uid}')"><i class="fas fa-save"></i></button>
+            <button class="btn btn-sm btn-ghost" onclick="viewMember('${member.uid}')"><i class="fas fa-eye"></i></button>
+            <button class="btn btn-sm ${member.role === "admin" ? "btn-danger" : "btn-ghost"}" onclick="toggleAdminRole('${member.uid}','${member.role}')">
+              ${member.role === "admin" ? '<i class="fas fa-shield-slash"></i>' : '<i class="fas fa-shield-halved"></i>'}
+            </button>
+            ${member.uid !== meAdmin.uid ? `<button class="btn btn-sm btn-danger" onclick="removeMember('${member.uid}','${escapeJs(getDisplayName(member))}')"><i class="fas fa-user-minus"></i></button>` : ""}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    async function savePoints(uid) {
+      const activityPoints = parseInt(document.getElementById(`ap_${uid}`)?.value, 10) || 0;
+      const rewardPoints = parseInt(document.getElementById(`rp_${uid}`)?.value, 10) || 0;
+
+      try {
+        await db.collection("users").doc(uid).update({ activityPoints, rewardPoints });
+        toast("Points updated.", "success");
+        const index = allMembers.findIndex(member => member.uid === uid);
+        if (index >= 0) {
+          allMembers[index].activityPoints = activityPoints;
+          allMembers[index].rewardPoints = rewardPoints;
+        }
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function toggleAdminRole(uid, role) {
+      const newRole = role === "admin" ? "member" : "admin";
+      if (!confirm(`Change role to ${newRole}?`)) return;
+
+      try {
+        await db.collection("users").doc(uid).update({ role: newRole });
+        toast(`Role changed to ${newRole}.`, "success");
+        await loadMembersTab();
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function removeMember(uid, name) {
+      try {
+        const removed = await Shell.blockMember(uid, name);
+        if (!removed) return;
+        await loadMembersTab();
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function viewMember(uid) {
+      const snap = await db.collection("users").doc(uid).get();
+      const user = snap.data();
+
+      showModal("Member Details", `
+        <div style="text-align:center;margin-bottom:20px;">
+          ${avatar(user, 64)}
+          <div style="font-family:Syne,sans-serif;font-weight:800;font-size:1.1rem;margin-top:10px;">${escapeHtmlText(getDisplayName(user))}</div>
+          <div style="font-size:.78rem;color:var(--text2);">${escapeHtmlText(user.email || "")}</div>
+          <div style="margin-top:6px;"><span class="badge ${user.role === "admin" ? "badge-orange" : "badge-green"}">${escapeHtmlText(user.role || "member")}</span></div>
+        </div>
+        <div class="detail-grid">
+          ${[
+            ["Activity Points", user.activityPoints || 0],
+            ["Reward Points", user.rewardPoints || 0],
+            ["Department", user.department || "-"],
+            ["Year", user.year || "-"],
+            ["Phone", user.phone || "-"],
+            ["GitHub", user.github || "-"],
+            ["LinkedIn", user.linkedin || "-"],
+            ["Website", user.website || "-"],
+            ["Interest", user.interest || "-"],
+            ["Goal", user.goal || "-"],
+            ["Skills", (user.skills || []).join(", ") || "-"],
+            ["Joined", formatTime(user.joinedAt)]
+          ].map(([label, value]) => `<div class="detail-item"><div class="dl">${escapeHtmlText(label)}</div><div class="dv">${escapeHtmlText(value)}</div></div>`).join("")}
+        </div>
+        ${user.bio ? `<div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:8px;font-size:.82rem;line-height:1.5;color:var(--text2);">${escapeHtmlText(user.bio)}</div>` : ""}
+      `);
+    }
+
+    async function loadQueriesTab() {
+      const container = document.getElementById("tabContent");
+      container.innerHTML = '<div class="text-muted text-sm">Loading...</div>';
+
+      const snap = await db.collection("queries").get();
+      const queries = sortByCreatedAtDesc(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+
+      container.innerHTML = `
+        <div style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:.85rem;color:var(--text2);">${queries.filter(query => query.status !== "closed").length} open · ${queries.filter(query => query.status === "closed").length} closed</span>
+          <a href="queries.html" class="btn btn-primary btn-sm" style="margin-left:auto"><i class="fas fa-reply"></i> Go to Queries Page</a>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;padding:10px 16px;background:var(--bg3);font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);">
+            <div>Subject</div><div>From</div><div>Status</div><div>Updated</div>
+          </div>
+          ${queries.length
+            ? queries.map(query => `
+                <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);font-size:.83rem;cursor:pointer;" onclick="window.location='queries.html'">
+                  <div>
+                    <div style="font-weight:600">${escapeHtmlText(query.subject || "Untitled query")}</div>
+                    <div style="font-size:.72rem;color:var(--text2)">${(query.replies || []).length} replies</div>
+                  </div>
+                  <div style="font-size:.78rem;color:var(--text2)">${escapeHtmlText(query.userName || "Unknown")}</div>
+                  <div><span class="badge ${query.status === "closed" ? "badge-blue" : "badge-green"}">${escapeHtmlText(query.status || "open")}</span></div>
+                  <div style="font-size:.75rem;color:var(--text3)">${timeAgo(query.updatedAt || query.createdAt)}</div>
+                </div>
+              `).join("")
+            : '<div style="padding:20px;color:var(--text2);font-size:.85rem">No queries yet.</div>'}
+        </div>
+      `;
+    }
+
+    async function loadActivityTab() {
+      const container = document.getElementById("tabContent");
+      container.innerHTML = '<div class="text-muted text-sm">Loading...</div>';
+
+      const snap = await db.collection("activity_log").get();
+      const activities = sortByCreatedAtDesc(snap.docs.map(doc => doc.data()))
+        .filter(item => isToday(item.createdAt))
+        .slice(0, 60);
+
+      container.innerHTML = `
+        <div class="card" style="padding:0;overflow:hidden;">
+          ${activities.length
+            ? activities.map(activity => `
+                <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
+                  <div class="activity-icon green" style="width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--green-dim);color:var(--green);font-size:.75rem;flex-shrink:0;">
+                    <i class="fas fa-bolt"></i>
+                  </div>
+                  <div style="flex:1;font-size:.83rem;">
+                    <strong>${escapeHtmlText(activity.userName || "Someone")}</strong> ${escapeHtmlText(activity.text || "")}
+                  </div>
+                  <div style="font-size:.72rem;color:var(--text3);white-space:nowrap">${timeAgo(activity.createdAt)}</div>
+                </div>
+              `).join("")
+            : '<div style="padding:20px;color:var(--text2);font-size:.85rem">No activity logged yet for today.</div>'}
+        </div>
+      `;
+    }
+
+    async function bulkAddPoints() {
+      const amount = parseInt(document.getElementById("bulkAmt")?.value, 10);
+      const type = document.getElementById("bulkType")?.value;
+      if (!amount || Number.isNaN(amount)) {
+        toast("Enter a valid amount.", "error");
+        return;
+      }
+
+      if (!confirm(`Award ${amount} ${type === "activityPoints" ? "activity" : "reward"} points to all active members?`)) {
+        return;
+      }
+
+      try {
+        const snap = await db.collection("users").get();
+        const members = activeUsersOnly(snap.docs.map(doc => ({ ref: doc.ref, ...doc.data() })))
+          .filter(member => member.role === "member");
+
+        const batch = db.batch();
+        members.forEach(member => {
+          batch.update(member.ref, { [type]: firebase.firestore.FieldValue.increment(amount) });
+        });
+        await batch.commit();
+
+        await logActivity({
+          type: "points",
+          text: `awarded ${amount} ${type === "activityPoints" ? "activity" : "reward"} points to all members`,
+          user: meAdmin
+        });
+
+        toast(`Awarded ${amount} points to ${members.length} members.`, "success");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    function showModal(title, content) {
+      const existing = document.getElementById("adminModal");
+      if (existing) existing.remove();
+
+      const overlay = document.createElement("div");
+      overlay.className = "modal-overlay";
+      overlay.id = "adminModal";
+      overlay.innerHTML = `
+        <div class="modal" style="max-width:560px;">
+          <div class="modal-header">
+            <h2>${title}</h2>
+            <button class="modal-close" onclick="document.getElementById('adminModal').remove()"><i class="fas fa-xmark"></i></button>
+          </div>
+          ${content}
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add("show"));
+      overlay.addEventListener("click", event => {
+        if (event.target === overlay) overlay.remove();
+      });
+    }
+
+    function escapeJs(value) {
+      return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    }
+  </script>
+</body>
+</html>

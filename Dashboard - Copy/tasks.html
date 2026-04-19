@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tasks - BIT TeamHub</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shell.js"></script>
+  <style>
+    .tasks-layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+      min-height: calc(100vh - var(--topbar-h) - 120px);
+    }
+
+    .tasks-sidebar,
+    .tasks-main {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .task-stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+
+    .task-stat-card h3 {
+      font-family: "Syne", sans-serif;
+      font-size: 1rem;
+      margin-bottom: 12px;
+    }
+
+    .task-stat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.84rem;
+    }
+
+    .task-stat-row:last-child { border-bottom: none; }
+    .task-stat-row span { color: var(--text2); }
+    .task-stat-row strong { color: var(--text); }
+
+    .task-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .task-search {
+      flex: 1;
+      min-width: 220px;
+      position: relative;
+    }
+
+    .task-search i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text3);
+      font-size: 0.8rem;
+    }
+
+    .task-search input {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px 10px 36px;
+      color: var(--text);
+      outline: none;
+    }
+
+    .task-search input:focus { border-color: var(--green); }
+
+    .task-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .task-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .task-card-top {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .task-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--green-dim);
+      color: var(--green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .task-title {
+      font-family: "Syne", sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.74rem;
+      color: var(--text2);
+    }
+
+    .task-body {
+      font-size: 0.84rem;
+      color: var(--text2);
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    .task-people {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .task-person-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 99px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      font-size: 0.74rem;
+      color: var(--text2);
+    }
+
+    .task-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+
+    .task-attach {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: var(--bg3);
+      color: var(--text2);
+      font-size: 0.78rem;
+      text-decoration: none;
+    }
+
+    .task-attach:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .task-empty {
+      padding: 50px 20px;
+      text-align: center;
+      color: var(--text3);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .member-select {
+      width: 100%;
+      min-height: 180px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      color: var(--text);
+      outline: none;
+    }
+
+    .member-select:focus { border-color: var(--green); }
+
+    .selected-members {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .file-box {
+      background: var(--bg3);
+      border: 1px dashed var(--border2);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .file-box input[type="file"] {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .file-preview {
+      margin-top: 10px;
+      padding: 10px 12px;
+      background: rgba(255,255,255,.03);
+      border-radius: 10px;
+      display: none;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .file-preview.show { display: flex; }
+
+    .upload-progress {
+      display: none;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .upload-progress.show { display: flex; }
+
+    .upload-track {
+      flex: 1;
+      height: 6px;
+      background: var(--bg3);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .upload-fill {
+      width: 0;
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--blue));
+      border-radius: 99px;
+      transition: width 0.2s ease;
+    }
+
+    @media (max-width: 980px) {
+      .tasks-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    const CLOUD_NAME = "dxf9jckjy";
+    const UPLOAD_PRESET = "bitsathydashboard_hub";
+
+    let myData = null;
+    let allTasks = [];
+    let allMembers = [];
+    let selectedTaskFile = null;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      myData = await Shell.init({ page: "tasks", title: "Tasks" });
+      if (!myData) return;
+      renderPage();
+      await loadMembers();
+      subscribeTasks();
+    });
+
+    function renderPage() {
+      const body = document.getElementById("pageBody");
+      body.innerHTML = `
+        <div class="page-header">
+          <h1>Tasks</h1>
+          <p>${Shell._isAdmin ? "Assign tasks to selected members or to the whole team." : "View the tasks assigned to you and your team."}</p>
+        </div>
+
+        <div class="tasks-layout">
+          <div class="tasks-sidebar">
+            <div class="task-stat-card">
+              <h3>Task Overview</h3>
+              <div class="task-stat-row"><span>Total visible tasks</span><strong id="taskVisibleCount">-</strong></div>
+              <div class="task-stat-row"><span>Assigned to all</span><strong id="taskAllCount">-</strong></div>
+              <div class="task-stat-row"><span>Created by me</span><strong id="taskMineCount">-</strong></div>
+              <div class="task-stat-row"><span>With attachments</span><strong id="taskAttachCount">-</strong></div>
+            </div>
+
+            <div class="task-stat-card">
+              <h3>Team Members</h3>
+              <div id="memberSummary" class="text-muted text-sm">Loading members...</div>
+            </div>
+          </div>
+
+          <div class="tasks-main">
+            <div class="task-toolbar">
+              <div class="task-search">
+                <i class="fas fa-search"></i>
+                <input type="text" id="taskSearch" placeholder="Search tasks, assignees, or descriptions...">
+              </div>
+              ${Shell._isAdmin ? '<button class="btn btn-primary" id="newTaskBtn"><i class="fas fa-plus"></i> New Task</button>' : ""}
+            </div>
+
+            <div class="task-list" id="taskList">
+              <div class="task-empty">Loading tasks...</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-overlay" id="taskModal">
+          <div class="modal" style="max-width:640px;">
+            <div class="modal-header">
+              <h2><i class="fas fa-list-check" style="color:var(--green);margin-right:8px;"></i>Create Task</h2>
+              <button class="modal-close" id="taskModalClose"><i class="fas fa-xmark"></i></button>
+            </div>
+
+            <div class="form-group">
+              <label>Task Title</label>
+              <input type="text" class="form-control" id="taskTitle" placeholder="e.g. Submit the event report">
+            </div>
+
+            <div class="form-group">
+              <label>Description</label>
+              <textarea class="form-control" id="taskDescription" rows="4" placeholder="Add the exact work the selected members should complete..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Due Date <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+              <input type="date" class="form-control" id="taskDueDate">
+            </div>
+
+            <div class="form-group">
+              <label style="display:flex;align-items:center;gap:8px;">
+                <input type="checkbox" id="assignAllToggle">
+                Assign this task to all members
+              </label>
+            </div>
+
+            <div class="form-group" id="memberSelectWrap">
+              <label>Select Members</label>
+              <select id="taskMembers" class="member-select" multiple></select>
+              <div class="selected-members" id="selectedMembers"></div>
+            </div>
+
+            <div class="form-group">
+              <label>Attachment <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+              <div class="file-box">
+                <div style="font-size:.82rem;color:var(--text2);">Upload a reference file for this task if needed.</div>
+                <input type="file" id="taskFileInput">
+                <div class="file-preview" id="taskFilePreview">
+                  <i class="fas fa-paperclip" style="color:var(--green);"></i>
+                  <div style="flex:1;min-width:0;">
+                    <div id="taskFileName" style="font-size:.82rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+                    <div id="taskFileSize" style="font-size:.72rem;color:var(--text3);"></div>
+                  </div>
+                  <button class="btn btn-sm btn-ghost" type="button" id="clearTaskFileBtn">Clear</button>
+                </div>
+                <div class="upload-progress" id="taskUploadProgress">
+                  <div class="upload-track"><div class="upload-fill" id="taskUploadFill"></div></div>
+                  <span id="taskUploadPct" style="font-size:.75rem;color:var(--text2);">0%</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;">
+              <button class="btn btn-primary" style="flex:1;" id="createTaskBtn"><i class="fas fa-paper-plane"></i> Assign Task</button>
+              <button class="btn btn-ghost" id="cancelTaskBtn">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("taskSearch").addEventListener("input", renderTasks);
+
+      if (Shell._isAdmin) {
+        document.getElementById("newTaskBtn").addEventListener("click", openTaskModal);
+        document.getElementById("taskModalClose").addEventListener("click", closeTaskModal);
+        document.getElementById("cancelTaskBtn").addEventListener("click", closeTaskModal);
+        document.getElementById("taskModal").addEventListener("click", event => {
+          if (event.target.id === "taskModal") closeTaskModal();
+        });
+        document.getElementById("assignAllToggle").addEventListener("change", toggleAssignAll);
+        document.getElementById("taskMembers").addEventListener("change", renderSelectedMembers);
+        document.getElementById("taskFileInput").addEventListener("change", handleTaskFileSelect);
+        document.getElementById("clearTaskFileBtn").addEventListener("click", clearTaskFile);
+        document.getElementById("createTaskBtn").addEventListener("click", createTask);
+      }
+    }
+
+    async function loadMembers() {
+      const snap = await db.collection("users").get();
+      allMembers = activeUsersOnly(snap.docs.map(doc => doc.data()))
+        .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)));
+
+      const memberSummary = document.getElementById("memberSummary");
+      if (memberSummary) {
+        memberSummary.innerHTML = allMembers.length
+          ? allMembers.map(member => `<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;">${avatar(member, 24)}<span style="font-size:.78rem;">${escapeHtmlText(getDisplayName(member))}</span></div>`).join("")
+          : '<div class="text-muted text-sm">No members available.</div>';
+      }
+
+      const select = document.getElementById("taskMembers");
+      if (!select) return;
+      select.innerHTML = allMembers.map(member => `
+        <option value="${member.uid}">${escapeHtmlText(getDisplayName(member))} (${escapeHtmlText(member.role || "member")})</option>
+      `).join("");
+      renderSelectedMembers();
+    }
+
+    function subscribeTasks() {
+      db.collection("tasks").onSnapshot(
+        snap => {
+          allTasks = sortByCreatedAtDesc(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          renderTasks();
+          updateTaskStats();
+        },
+        error => {
+          document.getElementById("taskList").innerHTML = `<div class="task-empty">${escapeHtmlText(readableError(error))}</div>`;
+        }
+      );
+    }
+
+    function getVisibleTasks() {
+      if (Shell._isAdmin) return [...allTasks];
+      return allTasks.filter(task => task.assignToAll || (task.assignedTo || []).includes(myData.uid));
+    }
+
+    function renderTasks() {
+      const list = document.getElementById("taskList");
+      if (!list) return;
+
+      const query = (document.getElementById("taskSearch")?.value || "").trim().toLowerCase();
+      const tasks = getVisibleTasks().filter(task => {
+        if (!query) return true;
+        const haystack = [
+          task.title,
+          task.description,
+          ...(task.assignedNames || []),
+          task.createdByName
+        ].join(" ").toLowerCase();
+        return haystack.includes(query);
+      });
+
+      if (!tasks.length) {
+        list.innerHTML = `<div class="task-empty">${query ? "No tasks match your search." : "No tasks available yet."}</div>`;
+        return;
+      }
+
+      list.innerHTML = tasks.map(task => `
+        <div class="task-card">
+          <div class="task-card-top">
+            <div class="task-icon"><i class="fas fa-list-check"></i></div>
+            <div style="flex:1;min-width:0;">
+              <div class="task-title">${escapeHtmlText(task.title || "Untitled task")}</div>
+              <div class="task-meta">
+                <span><i class="fas fa-user-pen"></i> ${escapeHtmlText(task.createdByName || "Admin")}</span>
+                <span><i class="fas fa-clock"></i> ${timeAgo(task.createdAt)}</span>
+                <span class="badge ${task.assignToAll ? "badge-blue" : "badge-green"}">${task.assignToAll ? "All members" : `${(task.assignedTo || []).length} selected`}</span>
+                ${task.dueDate ? `<span><i class="fas fa-calendar-day"></i> Due ${escapeHtmlText(task.dueDate)}</span>` : ""}
+              </div>
+            </div>
+          </div>
+          ${task.description ? `<div class="task-body">${escapeHtmlText(task.description)}</div>` : ""}
+          <div class="task-people">
+            ${task.assignToAll
+              ? '<span class="task-person-chip"><i class="fas fa-users"></i> All members</span>'
+              : (task.assignedNames || []).map(name => `<span class="task-person-chip"><i class="fas fa-user"></i> ${escapeHtmlText(name)}</span>`).join("")}
+          </div>
+          <div class="task-actions">
+            ${task.attachmentURL ? `
+              <a href="${escapeHtmlText(task.attachmentURL)}" target="_blank" rel="noopener" class="task-attach">
+                <i class="fas fa-paperclip"></i> ${escapeHtmlText(task.attachmentName || "Attachment")}
+              </a>
+            ` : ""}
+            ${Shell._isAdmin ? `<button class="btn btn-sm btn-danger" onclick="deleteTask('${task.id}')"><i class="fas fa-trash"></i> Delete</button>` : ""}
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function updateTaskStats() {
+      const visibleTasks = getVisibleTasks();
+      document.getElementById("taskVisibleCount").textContent = visibleTasks.length;
+      document.getElementById("taskAllCount").textContent = visibleTasks.filter(task => task.assignToAll).length;
+      document.getElementById("taskMineCount").textContent = visibleTasks.filter(task => task.createdByUid === myData.uid).length;
+      document.getElementById("taskAttachCount").textContent = visibleTasks.filter(task => task.attachmentURL).length;
+    }
+
+    function openTaskModal() {
+      document.getElementById("taskTitle").value = "";
+      document.getElementById("taskDescription").value = "";
+      document.getElementById("taskDueDate").value = "";
+      document.getElementById("assignAllToggle").checked = false;
+      document.getElementById("taskMembers").selectedIndex = -1;
+      toggleAssignAll();
+      clearTaskFile();
+      document.getElementById("taskModal").classList.add("show");
+      setTimeout(() => document.getElementById("taskTitle").focus(), 80);
+    }
+
+    function closeTaskModal() {
+      document.getElementById("taskModal").classList.remove("show");
+    }
+
+    function toggleAssignAll() {
+      const isAll = document.getElementById("assignAllToggle").checked;
+      const wrap = document.getElementById("memberSelectWrap");
+      if (wrap) wrap.style.display = isAll ? "none" : "";
+      renderSelectedMembers();
+    }
+
+    function renderSelectedMembers() {
+      const container = document.getElementById("selectedMembers");
+      const select = document.getElementById("taskMembers");
+      if (!container || !select) return;
+
+      if (document.getElementById("assignAllToggle").checked) {
+        container.innerHTML = '<span class="task-person-chip"><i class="fas fa-users"></i> This task will be assigned to all members</span>';
+        return;
+      }
+
+      const names = Array.from(select.selectedOptions).map(option => option.textContent.split(" (")[0]);
+      container.innerHTML = names.length
+        ? names.map(name => `<span class="task-person-chip"><i class="fas fa-user"></i> ${escapeHtmlText(name)}</span>`).join("")
+        : '<span class="text-muted text-sm">No members selected yet.</span>';
+    }
+
+    function handleTaskFileSelect(event) {
+      const file = event.target.files?.[0] || null;
+      selectedTaskFile = file;
+
+      const preview = document.getElementById("taskFilePreview");
+      if (!file) {
+        preview.classList.remove("show");
+        return;
+      }
+
+      document.getElementById("taskFileName").textContent = file.name;
+      document.getElementById("taskFileSize").textContent = formatBytes(file.size);
+      preview.classList.add("show");
+    }
+
+    function clearTaskFile() {
+      selectedTaskFile = null;
+      const input = document.getElementById("taskFileInput");
+      if (input) input.value = "";
+      document.getElementById("taskFilePreview")?.classList.remove("show");
+      document.getElementById("taskUploadProgress")?.classList.remove("show");
+      const fill = document.getElementById("taskUploadFill");
+      const pct = document.getElementById("taskUploadPct");
+      if (fill) fill.style.width = "0%";
+      if (pct) pct.textContent = "0%";
+    }
+
+    async function uploadTaskAttachment(file, onProgress) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", UPLOAD_PRESET);
+
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`);
+        xhr.upload.onprogress = event => {
+          if (event.lengthComputable && onProgress) {
+            onProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            resolve(JSON.parse(xhr.responseText).secure_url);
+          } else {
+            reject(new Error("Attachment upload failed. Please check the Cloudinary preset."));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error during attachment upload."));
+        xhr.send(formData);
+      });
+    }
+
+    async function createTask() {
+      const title = document.getElementById("taskTitle").value.trim();
+      const description = document.getElementById("taskDescription").value.trim();
+      const dueDate = document.getElementById("taskDueDate").value;
+      const assignToAll = document.getElementById("assignAllToggle").checked;
+      const selectedOptions = Array.from(document.getElementById("taskMembers").selectedOptions);
+      const assignedTo = assignToAll ? allMembers.map(member => member.uid) : selectedOptions.map(option => option.value);
+      const assignedNames = assignToAll ? allMembers.map(member => getDisplayName(member)) : selectedOptions.map(option => option.textContent.split(" (")[0]);
+
+      if (!title) {
+        toast("Please enter a task title.", "error");
+        return;
+      }
+
+      if (!assignToAll && !assignedTo.length) {
+        toast("Select at least one member or choose 'assign to all'.", "error");
+        return;
+      }
+
+      const createButton = document.getElementById("createTaskBtn");
+      const uploadProgress = document.getElementById("taskUploadProgress");
+      const uploadFill = document.getElementById("taskUploadFill");
+      const uploadPct = document.getElementById("taskUploadPct");
+      let attachmentURL = "";
+
+      createButton.disabled = true;
+      createButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Assigning...';
+
+      try {
+        if (selectedTaskFile) {
+          uploadProgress.classList.add("show");
+          attachmentURL = await uploadTaskAttachment(selectedTaskFile, progress => {
+            uploadFill.style.width = `${progress}%`;
+            uploadPct.textContent = `${progress}%`;
+          });
+        }
+
+        await db.collection("tasks").add({
+          title,
+          description,
+          dueDate: dueDate || "",
+          assignToAll,
+          assignedTo,
+          assignedNames,
+          attachmentURL,
+          attachmentName: selectedTaskFile?.name || "",
+          attachmentSize: selectedTaskFile?.size || 0,
+          createdByUid: myData.uid,
+          createdByName: getDisplayName(myData),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          status: "open"
+        });
+
+        await logActivity({
+          type: "task",
+          text: `assigned the task "${title}"`,
+          user: myData,
+          extra: { assignToAll, assignedCount: assignedTo.length }
+        });
+
+        toast("Task assigned successfully.", "success");
+        closeTaskModal();
+      } catch (error) {
+        toast(readableError(error), "error");
+      } finally {
+        createButton.disabled = false;
+        createButton.innerHTML = '<i class="fas fa-paper-plane"></i> Assign Task';
+      }
+    }
+
+    async function deleteTask(taskId) {
+      if (!confirm("Delete this task?")) return;
+      try {
+        await db.collection("tasks").doc(taskId).delete();
+        await logActivity({
+          type: "task",
+          text: "deleted a task",
+          user: myData,
+          extra: { taskId }
+        });
+        toast("Task deleted.", "info");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return "0 B";
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1048576).toFixed(1)} MB`;
+    }
+  </script>
+</body>
+</html>

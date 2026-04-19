@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Dashboard - BIT TeamHub</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shell.js"></script>
+  <style>
+    .welcome-banner {
+      background: linear-gradient(130deg, #0d2818 0%, #0b1f2f 100%);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .welcome-banner::before {
+      content: "";
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 200px;
+      height: 200px;
+      background: var(--green);
+      border-radius: 50%;
+      opacity: 0.06;
+      filter: blur(40px);
+    }
+
+    .welcome-banner .wb-text h2 {
+      font-family: "Syne", sans-serif;
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      margin-bottom: 4px;
+    }
+
+    .welcome-banner .wb-text p {
+      color: var(--text2);
+      font-size: 0.88rem;
+    }
+
+    .welcome-banner .wb-pts {
+      margin-left: auto;
+      display: flex;
+      gap: 16px;
+    }
+
+    .wb-pt-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 20px;
+      text-align: center;
+      min-width: 90px;
+    }
+
+    .wb-pt-card .pt-val {
+      font-family: "Syne", sans-serif;
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+    }
+
+    .wb-pt-card .pt-label {
+      font-size: 0.68rem;
+      color: var(--text2);
+      margin-top: 2px;
+      font-weight: 500;
+    }
+
+    .wb-pt-card.green .pt-val { color: var(--green); }
+    .wb-pt-card.blue .pt-val { color: var(--blue); }
+
+    .chart-bar-wrap {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 80px;
+      padding-top: 8px;
+    }
+
+    .chart-bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .chart-bar {
+      width: 100%;
+      border-radius: 5px 5px 0 0;
+      background: var(--green);
+      opacity: 0.7;
+      transition: opacity 0.2s;
+      min-height: 4px;
+    }
+
+    .chart-bar:hover { opacity: 1; }
+    .chart-bar.blue { background: var(--blue); }
+    .chart-day { font-size: 0.62rem; color: var(--text3); }
+
+    .activity-feed {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      min-height: 240px;
+    }
+
+    .activity-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .activity-item:last-child { border-bottom: none; }
+
+    .activity-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.78rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .activity-icon.green { background: var(--green-dim); color: var(--green); }
+    .activity-icon.blue { background: var(--blue-dim); color: var(--blue); }
+    .activity-icon.orange { background: rgba(255, 171, 64, 0.12); color: var(--orange); }
+
+    .activity-text {
+      font-size: 0.83rem;
+      line-height: 1.45;
+      flex: 1;
+    }
+
+    .activity-text .time {
+      font-size: 0.72rem;
+      color: var(--text3);
+      margin-top: 2px;
+    }
+
+    .top-members-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 12px;
+    }
+
+    .top-member-card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .top-member-card:hover {
+      border-color: var(--green);
+      transform: translateY(-2px);
+    }
+
+    .top-member-card .rank {
+      font-family: "Syne", sans-serif;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: var(--text3);
+      margin-bottom: 8px;
+    }
+
+    .top-member-card .rank.gold { color: #ffd700; }
+    .top-member-card .rank.silver { color: #c0c0c0; }
+    .top-member-card .rank.bronze { color: #cd7f32; }
+    .top-member-card .name {
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-top: 8px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .top-member-card .pts {
+      font-size: 0.7rem;
+      color: var(--text3);
+    }
+  </style>
+</head>
+<body>
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const userData = await Shell.init({ page: "dashboard", title: "Dashboard" });
+      if (!userData) return;
+
+      const body = document.getElementById("pageBody");
+      body.innerHTML = `
+        <div class="welcome-banner fade-in-up">
+          <div>${avatar(userData, 52)}</div>
+          <div class="wb-text">
+            <h2>Welcome back, ${escapeHtmlText((getDisplayName(userData) || "there").split(" ")[0])}</h2>
+            <p>${new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })} · ${userData.role === "admin" ? "Admin" : "Member"}</p>
+          </div>
+          <div class="wb-pts">
+            <div class="wb-pt-card green">
+              <div class="pt-val" id="myActivity">-</div>
+              <div class="pt-label">Activity Pts</div>
+            </div>
+            <div class="wb-pt-card blue">
+              <div class="pt-val" id="myReward">-</div>
+              <div class="pt-label">Reward Pts</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-grid fade-in-up delay-1">
+          <div class="stat-card"><div class="stat-icon" style="background:var(--green-dim);color:var(--green)"><i class="fas fa-users"></i></div><div class="stat-value" id="statMembers">...</div><div class="stat-label">Total Members</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:var(--blue-dim);color:var(--blue)"><i class="fas fa-bolt"></i></div><div class="stat-value" id="statActivity">...</div><div class="stat-label">Team Activity Pts</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(255,171,64,.12);color:var(--orange)"><i class="fas fa-star"></i></div><div class="stat-value" id="statReward">...</div><div class="stat-label">Team Reward Pts</div></div>
+          <div class="stat-card"><div class="stat-icon" style="background:rgba(206,147,216,.12);color:var(--purple)"><i class="fas fa-circle-question"></i></div><div class="stat-value" id="statQueries">...</div><div class="stat-label">Open Queries</div></div>
+        </div>
+
+        <div class="main-aside fade-in-up delay-2">
+          <div style="display:flex;flex-direction:column;gap:20px;">
+            <div class="card">
+              <div class="flex justify-between items-center mb-4">
+                <div><div class="card-title">Weekly Activity</div><div class="card-sub">Team activity snapshot this week</div></div>
+                <div class="flex gap-2">
+                  <span class="badge badge-green"><i class="fas fa-circle" style="font-size:.5rem"></i> Activity</span>
+                  <span class="badge badge-blue"><i class="fas fa-circle" style="font-size:.5rem"></i> Reward</span>
+                </div>
+              </div>
+              <div class="chart-bar-wrap" id="weekChart"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-title mb-4">Top Members</div>
+              <div class="top-members-row" id="topMembers"><div class="text-muted text-sm">Loading...</div></div>
+            </div>
+
+            <div class="card">
+              <div class="card-title mb-4">My Progress</div>
+              <div id="myProgress"><div class="text-muted text-sm">Loading...</div></div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:20px;">
+            <div class="card" style="flex:1;">
+              <div class="flex justify-between items-center mb-4">
+                <div class="card-title">Recent Activity</div>
+                <span class="badge badge-blue">Today only</span>
+              </div>
+              <div class="activity-feed" id="activityFeed">
+                <div class="text-muted text-sm">Loading...</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-title mb-4">Quick Actions</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <a href="queries.html" class="btn btn-ghost w-full"><i class="fas fa-circle-question"></i> Ask Admin a Query</a>
+                <a href="chat.html" class="btn btn-ghost w-full"><i class="fas fa-comments"></i> Open Group Chat</a>
+                <a href="tasks.html" class="btn btn-ghost w-full"><i class="fas fa-list-check"></i> Open Tasks</a>
+                <a href="leaderboard.html" class="btn btn-ghost w-full"><i class="fas fa-trophy"></i> View Leaderboard</a>
+                <a href="profile.html" class="btn btn-ghost w-full"><i class="fas fa-user-pen"></i> Edit My Profile</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      loadStats(userData);
+      loadChart();
+      loadTopMembers();
+      loadActivity();
+      loadMyProgress(userData);
+    });
+
+    async function loadStats(me) {
+      document.getElementById("myActivity").textContent = me.activityPoints ?? 0;
+      document.getElementById("myReward").textContent = me.rewardPoints ?? 0;
+
+      const userSnap = await db.collection("users").get();
+      const users = activeUsersOnly(userSnap.docs.map(doc => doc.data()));
+
+      const totals = users.reduce((acc, user) => {
+        acc.activity += user.activityPoints || 0;
+        acc.reward += user.rewardPoints || 0;
+        return acc;
+      }, { activity: 0, reward: 0 });
+
+      document.getElementById("statMembers").textContent = users.length;
+      document.getElementById("statActivity").textContent = totals.activity;
+      document.getElementById("statReward").textContent = totals.reward;
+
+      const querySnap = await db.collection("queries").get();
+      const openQueries = querySnap.docs.filter(doc => doc.data()?.status !== "closed");
+      document.getElementById("statQueries").textContent = openQueries.length;
+    }
+
+    function loadChart() {
+      const days = ["S", "M", "T", "W", "T", "F", "S"];
+      const activityValues = days.map(() => Math.floor(Math.random() * 80 + 10));
+      const rewardValues = days.map(() => Math.floor(Math.random() * 60 + 5));
+      const maxValue = Math.max(...activityValues, ...rewardValues, 1);
+      const wrap = document.getElementById("weekChart");
+      if (!wrap) return;
+
+      wrap.innerHTML = days.map((day, index) => `
+        <div class="chart-bar-col">
+          <div class="chart-bar" style="height:${(activityValues[index] / maxValue) * 72}px" title="Activity: ${activityValues[index]}"></div>
+          <div class="chart-day">${day}</div>
+        </div>
+      `).join("");
+    }
+
+    async function loadTopMembers() {
+      const snap = await db.collection("users").get();
+      const users = sortByCreatedAtDesc(
+        activeUsersOnly(snap.docs.map(doc => doc.data())).sort((a, b) => (b.activityPoints || 0) - (a.activityPoints || 0))
+      ).sort((a, b) => (b.activityPoints || 0) - (a.activityPoints || 0)).slice(0, 6);
+
+      const ranks = ["1st", "2nd", "3rd"];
+      const rankClass = ["gold", "silver", "bronze"];
+      const el = document.getElementById("topMembers");
+      if (!el) return;
+
+      if (!users.length) {
+        el.innerHTML = '<div class="text-muted text-sm">No members yet.</div>';
+        return;
+      }
+
+      el.innerHTML = users.map((user, index) => `
+        <div class="top-member-card">
+          <div class="rank ${rankClass[index] || ""}">${ranks[index] || `#${index + 1}`}</div>
+          ${avatar(user, 40)}
+          <div class="name">${escapeHtmlText(getDisplayName(user))}</div>
+          <div class="pts">${user.activityPoints || 0} pts</div>
+        </div>
+      `).join("");
+    }
+
+    async function loadActivity() {
+      const snap = await db.collection("activity_log").get();
+      const activities = sortByCreatedAtDesc(snap.docs.map(doc => doc.data()))
+        .filter(item => isToday(item.createdAt))
+        .slice(0, 10);
+
+      const el = document.getElementById("activityFeed");
+      if (!el) return;
+
+      if (!activities.length) {
+        el.innerHTML = '<div class="text-muted text-sm">The daily activity feed resets every day. New activity will appear here as the team works.</div>';
+        return;
+      }
+
+      const iconMap = {
+        points: { cls: "green", icon: "bolt" },
+        query: { cls: "blue", icon: "circle-question" },
+        chat: { cls: "orange", icon: "comments" },
+        join: { cls: "green", icon: "user-plus" },
+        task: { cls: "blue", icon: "list-check" },
+        member: { cls: "orange", icon: "user-minus" },
+        lc: { cls: "green", icon: "book-open" }
+      };
+
+      el.innerHTML = activities.map(activity => {
+        const icon = iconMap[activity.type] || { cls: "green", icon: "circle" };
+        return `
+          <div class="activity-item">
+            <div class="activity-icon ${icon.cls}"><i class="fas fa-${icon.icon}"></i></div>
+            <div class="activity-text">
+              <strong>${escapeHtmlText(activity.userName || "Someone")}</strong> ${escapeHtmlText(activity.text || "")}
+              <div class="time">${timeAgo(activity.createdAt)}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    async function loadMyProgress(me) {
+      const snap = await db.collection("users").get();
+      const users = activeUsersOnly(snap.docs.map(doc => doc.data()));
+      const points = users.map(user => user.activityPoints || 0);
+      const maxPts = Math.max(...points, 1);
+      const rank = points.filter(point => point > (me.activityPoints || 0)).length + 1;
+      const activityPct = Math.round(((me.activityPoints || 0) / maxPts) * 100);
+      const rewardMax = Math.max(...users.map(user => user.rewardPoints || 0), 1);
+
+      const el = document.getElementById("myProgress");
+      if (!el) return;
+
+      el.innerHTML = `
+        <div class="progress-row">
+          <div class="progress-label"><span>Activity Points</span><span>${me.activityPoints || 0}</span></div>
+          <div class="progress-track"><div class="progress-fill" style="width:${activityPct}%"></div></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label"><span>Reward Points</span><span>${me.rewardPoints || 0}</span></div>
+          <div class="progress-track"><div class="progress-fill blue" style="width:${Math.round(((me.rewardPoints || 0) / rewardMax) * 100)}%"></div></div>
+        </div>
+        <div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:10px;display:flex;align-items:center;gap:14px;">
+          <div style="font-family:Syne,sans-serif;font-size:1.6rem;font-weight:800;color:var(--orange);">#${rank}</div>
+          <div>
+            <div style="font-size:.8rem;font-weight:600;">Your Leaderboard Rank</div>
+            <div style="font-size:.72rem;color:var(--text2);">out of ${users.length} active members</div>
+          </div>
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

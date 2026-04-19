@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leaderboard — BIT TeamHub</title>
+<link rel="stylesheet" href="style.css">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="shell.js"></script>
+<style>
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 16px;
+  margin: 20px 0 32px;
+  height: 200px;
+}
+.podium-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.podium-item .pod-avatar { position: relative; }
+.podium-item .pod-crown {
+  position: absolute;
+  top: -20px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.4rem;
+}
+.podium-item .pod-name { font-size: .78rem; font-weight: 600; text-align: center; max-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.podium-item .pod-pts { font-size: .7rem; color: var(--text3); }
+.pod-block {
+  width: 90px;
+  border-radius: 10px 10px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Syne, sans-serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: rgba(255,255,255,.5);
+}
+.pod-block.first  { height: 110px; background: linear-gradient(160deg, #ffd700, #ffab00); color: rgba(0,0,0,.4); }
+.pod-block.second { height: 80px;  background: linear-gradient(160deg, #b0bec5, #90a4ae); }
+.pod-block.third  { height: 60px;  background: linear-gradient(160deg, #a1887f, #8d6e63); }
+
+.lb-tabs { display: flex; gap: 2px; background: var(--bg3); border-radius: 10px; padding: 3px; margin-bottom: 20px; max-width: 300px; }
+.lb-tab {
+  flex: 1; padding: 8px; border-radius: 8px; border: none;
+  background: transparent; color: var(--text2); font-size: .82rem; font-weight: 600; transition: all .18s;
+}
+.lb-tab.active { background: var(--card); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,.3); }
+
+.lb-table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--border);
+  transition: background .15s;
+}
+.lb-row:last-child { border-bottom: none; }
+.lb-row:hover { background: rgba(255,255,255,.02); }
+.lb-row.mine { background: var(--green-dim); }
+.lb-rank {
+  width: 30px;
+  font-family: Syne, sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--text3);
+  text-align: center;
+  flex-shrink: 0;
+}
+.lb-rank.top { color: var(--orange); }
+.lb-info { flex: 1; }
+.lb-name { font-weight: 600; font-size: .88rem; }
+.lb-sub { font-size: .72rem; color: var(--text2); }
+.lb-pts {
+  font-family: Syne, sans-serif;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--green);
+}
+.lb-bar-wrap { width: 120px; }
+.lb-bar-track { height: 5px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+.lb-bar-fill { height: 100%; background: var(--green); border-radius: 99px; transition: width .6s; }
+</style>
+</head>
+<body>
+<script>
+let me = null;
+let currentSort = 'activityPoints';
+
+document.addEventListener('DOMContentLoaded', async () => {
+  me = await Shell.init({ page: 'leaderboard', title: 'Leaderboard' });
+
+  const body = document.getElementById('pageBody');
+  body.innerHTML = `
+    <div class="page-header">
+      <h1>🏆 Leaderboard</h1>
+      <p>Track your team's performance and celebrate top contributors</p>
+    </div>
+
+    <div id="podiumWrap"></div>
+
+    <div class="lb-tabs">
+      <button class="lb-tab active" onclick="switchTab('activityPoints', this)">Activity Points</button>
+      <button class="lb-tab" onclick="switchTab('rewardPoints', this)">Reward Points</button>
+    </div>
+
+    <div class="lb-table-wrap" id="lbTable"><div style="padding:20px;color:var(--text2);font-size:.85rem">Loading…</div></div>
+  `;
+
+  loadLeaderboard('activityPoints');
+});
+
+async function switchTab(field, btn) {
+  document.querySelectorAll('.lb-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentSort = field;
+  loadLeaderboard(field);
+}
+
+async function loadLeaderboard(field) {
+  const snap = await db.collection('users').orderBy(field, 'desc').get();
+  const members = snap.docs.map((d,i) => ({rank: i+1, ...d.data()}));
+  const maxPts = Math.max(...members.map(m => m[field]||0), 1);
+
+  // Podium (top 3)
+  const podWrap = document.getElementById('podiumWrap');
+  if (podWrap && members.length >= 1) {
+    const top3 = [members[1], members[0], members[2]].filter(Boolean);
+    const classes = ['second', 'first', 'third'];
+    const labels  = ['2nd', '1st', '3rd'];
+    const crowns  = ['🥈', '👑', '🥉'];
+    podWrap.innerHTML = `
+      <div class="podium">
+        ${top3.map((u, i) => u ? `
+          <div class="podium-item">
+            <div class="pod-avatar">
+              <div class="pod-crown">${crowns[i]}</div>
+              ${avatar(u, i===1 ? 54 : 42)}
+            </div>
+            <div class="pod-name">${u.displayName || u.email.split('@')[0]}</div>
+            <div class="pod-pts">${u[field]||0} pts</div>
+            <div class="pod-block ${classes[i]}">${labels[i]}</div>
+          </div>
+        ` : '').join('')}
+      </div>
+    `;
+  }
+
+  // Table
+  const table = document.getElementById('lbTable');
+  if (!table) return;
+  table.innerHTML = members.map(u => {
+    const pts = u[field]||0;
+    const pct = Math.round((pts / maxPts) * 100);
+    const mine = u.uid === me.uid;
+    return `
+      <div class="lb-row ${mine?'mine':''}">
+        <div class="lb-rank ${u.rank<=3?'top':''}">${u.rank<=3 ? ['🥇','🥈','🥉'][u.rank-1] : '#'+u.rank}</div>
+        ${avatar(u, 36)}
+        <div class="lb-info">
+          <div class="lb-name">${u.displayName || u.email.split('@')[0]} ${mine?'<span style="font-size:.65rem;background:var(--green-dim);color:var(--green);padding:1px 6px;border-radius:99px;">You</span>':''}</div>
+          <div class="lb-sub">${u.department || u.email.split('@')[0]} ${u.role==='admin'?'· ⚡ Admin':''}</div>
+        </div>
+        <div class="lb-bar-wrap">
+          <div class="lb-bar-track"><div class="lb-bar-fill" style="width:${pct}%"></div></div>
+        </div>
+        <div class="lb-pts">${pts}</div>
+      </div>
+    `;
+  }).join('');
+}
+</script>
+</body>
+</html>

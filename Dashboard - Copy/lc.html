@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Learning Center - BIT TeamHub</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shell.js"></script>
+  <style>
+    .lc-layout {
+      display: grid;
+      grid-template-columns: 270px 1fr;
+      gap: 20px;
+      min-height: calc(100vh - var(--topbar-h) - 56px);
+    }
+
+    .lc-sidebar,
+    .lc-main {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 0;
+    }
+
+    .lc-sidebar-header,
+    .lc-stats-card,
+    .lc-filter-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .lc-sidebar-title {
+      font-family: "Syne", sans-serif;
+      font-weight: 800;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .lc-sidebar-title i { color: var(--green); }
+
+    .lc-add-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px;
+      background: var(--green);
+      color: #0b0e15;
+      font-weight: 700;
+      font-size: 0.88rem;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.2s, box-shadow 0.2s;
+      box-shadow: 0 0 18px var(--green-glow);
+    }
+
+    .lc-add-btn:hover {
+      background: var(--green2);
+      box-shadow: 0 0 28px var(--green-glow);
+    }
+
+    .lc-filter-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text3);
+      margin-bottom: 8px;
+    }
+
+    .lc-stat-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.82rem;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .lc-stat-row:last-child { border-bottom: none; }
+    .lc-stat-row i { width: 16px; text-align: center; color: var(--text3); }
+    .lc-stat-row span { color: var(--text2); flex: 1; }
+    .lc-stat-row strong { color: var(--text); }
+
+    .lc-filter-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      color: var(--text2);
+      font-size: 0.83rem;
+      font-weight: 500;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.18s;
+      width: 100%;
+    }
+
+    .lc-filter-btn i { width: 16px; text-align: center; font-size: 0.82rem; }
+    .lc-filter-btn:hover { background: var(--bg3); color: var(--text); }
+    .lc-filter-btn.active { background: var(--green-dim); color: var(--green); }
+
+    .lc-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .lc-search-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 180px;
+    }
+
+    .lc-search-wrap i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text3);
+      font-size: 0.8rem;
+    }
+
+    .lc-search {
+      width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 14px 9px 36px;
+      color: var(--text);
+      font-size: 0.86rem;
+      outline: none;
+    }
+
+    .lc-search:focus { border-color: var(--green); }
+
+    .lc-sort-select {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 14px;
+      color: var(--text);
+      font-size: 0.84rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .lc-entries-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .lc-entry-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .lc-entry-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--border2);
+      box-shadow: var(--shadow);
+    }
+
+    .lc-entry-top {
+      padding: 16px 16px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .lc-file-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      flex-shrink: 0;
+    }
+
+    .lc-entry-info { flex: 1; min-width: 0; }
+
+    .lc-entry-title {
+      font-family: "Syne", sans-serif;
+      font-weight: 700;
+      font-size: 0.92rem;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lc-entry-meta {
+      font-size: 0.72rem;
+      color: var(--text2);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .lc-entry-body {
+      padding: 0 16px 14px;
+      flex: 1;
+    }
+
+    .lc-file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text2);
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .lc-file-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .lc-entry-actions {
+      padding: 10px 14px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .lc-open-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid var(--green-glow);
+      border-radius: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.18s;
+    }
+
+    .lc-open-btn:hover {
+      background: var(--green);
+      color: #0b0e15;
+    }
+
+    .lc-delete-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,82,82,.08);
+      color: var(--red);
+      border: 1px solid rgba(255,82,82,.15);
+      border-radius: 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+
+    .lc-delete-btn:hover { background: rgba(255,82,82,.2); }
+
+    .lc-empty {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+      color: var(--text3);
+      gap: 14px;
+      text-align: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+
+    .upload-drop-zone {
+      border: 2px dashed var(--border2);
+      border-radius: 12px;
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .upload-drop-zone:hover,
+    .upload-drop-zone.dragover {
+      border-color: var(--green);
+      background: var(--green-dim);
+    }
+
+    .upload-drop-zone input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .selected-file-preview {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-top: 10px;
+    }
+
+    .selected-file-preview.show { display: flex; }
+
+    .sfp-file-list {
+      display: grid;
+      gap: 6px;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .sfp-file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.02);
+      border: 1px solid var(--border);
+    }
+
+    .sfp-file-item span {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.78rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sfp-file-item small {
+      font-size: 0.7rem;
+      color: var(--text3);
+      flex-shrink: 0;
+    }
+
+    .upload-progress {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .upload-progress.show { display: flex; }
+
+    .prog-track {
+      height: 6px;
+      background: var(--bg3);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .prog-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--blue));
+      border-radius: 99px;
+      transition: width 0.3s;
+      width: 0%;
+    }
+
+    .prog-pct {
+      font-size: 0.74rem;
+      color: var(--text2);
+      text-align: right;
+    }
+
+    @media (max-width: 900px) {
+      .lc-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    const CLOUD_NAME = "dxf9jckjy";
+    const UPLOAD_PRESET = "bitsathydashboard_hub";
+
+    let myData = null;
+    let allEntries = [];
+    let currentFilter = "all";
+    let selectedFiles = [];
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      myData = await Shell.init({ page: "lc", title: "Learning Center" });
+      if (!myData) return;
+      renderPage();
+      subscribeEntries();
+    });
+
+    function renderPage() {
+      const body = document.getElementById("pageBody");
+      body.innerHTML = `
+        <div class="page-header">
+          <h1>Learning Center</h1>
+          <p>Upload and share resources, notes, and files with your team.</p>
+        </div>
+
+        <div class="lc-layout">
+          <div class="lc-sidebar">
+            <div class="lc-sidebar-header">
+              <div class="lc-sidebar-title"><i class="fas fa-book-open"></i> Learning Center</div>
+              <button class="lc-add-btn" id="lcAddBtn"><i class="fas fa-plus"></i> Add Resource</button>
+            </div>
+
+            <div class="lc-stats-card">
+              <div class="lc-filter-label">Overview</div>
+              <div class="lc-stat-row"><i class="fas fa-file"></i><span>Total Resources</span><strong id="statTotal">-</strong></div>
+              <div class="lc-stat-row"><i class="fas fa-user"></i><span>My Uploads</span><strong id="statMine">-</strong></div>
+              <div class="lc-stat-row"><i class="fas fa-clock"></i><span>Latest</span><strong id="statLatest">-</strong></div>
+            </div>
+
+            <div class="lc-filter-card">
+              <div class="lc-filter-label">Filter By Type</div>
+              <button class="lc-filter-btn active" data-filter="all"><i class="fas fa-th-large"></i> All Files</button>
+              <button class="lc-filter-btn" data-filter="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+              <button class="lc-filter-btn" data-filter="doc"><i class="fas fa-file-lines"></i> Documents</button>
+              <button class="lc-filter-btn" data-filter="img"><i class="fas fa-image"></i> Images</button>
+              <button class="lc-filter-btn" data-filter="video"><i class="fas fa-video"></i> Videos</button>
+              <button class="lc-filter-btn" data-filter="zip"><i class="fas fa-file-zipper"></i> Archives</button>
+              <button class="lc-filter-btn" data-filter="code"><i class="fas fa-code"></i> Code</button>
+              <button class="lc-filter-btn" data-filter="other"><i class="fas fa-file"></i> Other</button>
+            </div>
+
+            <div class="lc-stats-card">
+              <div class="lc-filter-label">My Recent</div>
+              <div id="myRecentList" style="font-size:.78rem;color:var(--text2);">Loading...</div>
+            </div>
+          </div>
+
+          <div class="lc-main">
+            <div class="lc-toolbar">
+              <div class="lc-search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" class="lc-search" id="lcSearch" placeholder="Search resources...">
+              </div>
+              <select class="lc-sort-select" id="lcSort">
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="az">A - Z</option>
+                <option value="za">Z - A</option>
+              </select>
+            </div>
+            <div class="lc-entries-grid" id="lcGrid">
+              <div class="lc-empty"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-overlay" id="lcModal">
+          <div class="modal" style="max-width:520px;">
+            <div class="modal-header">
+              <h2><i class="fas fa-upload" style="color:var(--green);margin-right:8px;"></i>Add Resource</h2>
+              <button class="modal-close" id="lcModalClose"><i class="fas fa-xmark"></i></button>
+            </div>
+
+            <div class="form-group">
+              <label>Resource Title <span style="color:var(--text3);font-weight:400;">(optional for bulk upload)</span></label>
+              <input type="text" class="form-control" id="lcTitle" placeholder="e.g. Data Structures Notes">
+            </div>
+
+            <div class="form-group">
+              <label>Description <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+              <textarea class="form-control" id="lcDesc" rows="2" placeholder="Brief description..."></textarea>
+            </div>
+
+            <div class="form-group">
+              <label>Upload Files</label>
+              <div class="upload-drop-zone" id="lcDropZone">
+                <input type="file" id="lcFileInput" accept="*/*" multiple>
+                <div style="font-size:2rem;color:var(--green);margin-bottom:10px;"><i class="fas fa-cloud-arrow-up"></i></div>
+                <div style="font-size:.88rem;color:var(--text2);line-height:1.5;">Click or drag and drop one or more files here</div>
+                <div style="font-size:.74rem;color:var(--text3);margin-top:4px;">All formats supported - PDF, DOCX, PPT, images, videos, ZIP, code, and more.</div>
+              </div>
+              <div class="selected-file-preview" id="sfPreview">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+                  <div style="font-size:.82rem;font-weight:600;">Selected files</div>
+                  <button class="btn btn-sm btn-ghost" id="sfpClear" type="button">Clear</button>
+                </div>
+                <div class="sfp-file-list" id="sfpFileList"></div>
+              </div>
+              <div class="upload-progress" id="uploadProgress">
+                <div class="prog-track"><div class="prog-fill" id="progBar"></div></div>
+                <div class="prog-pct" id="progPct">0%</div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:6px;">
+              <button class="btn btn-primary" id="lcSubmitBtn" style="flex:1;"><i class="fas fa-upload"></i> Upload & Save</button>
+              <button class="btn btn-ghost" id="lcCancelBtn">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("lcAddBtn").addEventListener("click", openModal);
+      document.getElementById("lcModalClose").addEventListener("click", closeModal);
+      document.getElementById("lcCancelBtn").addEventListener("click", closeModal);
+      document.getElementById("lcModal").addEventListener("click", event => {
+        if (event.target.id === "lcModal") closeModal();
+      });
+      document.getElementById("lcSubmitBtn").addEventListener("click", submitEntry);
+      document.getElementById("lcFileInput").addEventListener("change", event => addFiles(event.target.files));
+      document.getElementById("sfpClear").addEventListener("click", clearFiles);
+      document.getElementById("lcSearch").addEventListener("input", renderGrid);
+      document.getElementById("lcSort").addEventListener("change", renderGrid);
+
+      document.querySelectorAll(".lc-filter-btn").forEach(button => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".lc-filter-btn").forEach(item => item.classList.remove("active"));
+          button.classList.add("active");
+          currentFilter = button.dataset.filter;
+          renderGrid();
+        });
+      });
+
+      const dropZone = document.getElementById("lcDropZone");
+      dropZone.addEventListener("dragover", event => {
+        event.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+      dropZone.addEventListener("drop", event => {
+        event.preventDefault();
+        dropZone.classList.remove("dragover");
+        if (event.dataTransfer.files?.length) addFiles(event.dataTransfer.files);
+      });
+    }
+
+    function subscribeEntries() {
+      db.collection("lc_entries").onSnapshot(
+        snap => {
+          allEntries = sortByCreatedAtDesc(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          renderGrid();
+          updateStats();
+        },
+        error => {
+          document.getElementById("lcGrid").innerHTML = `<div class="lc-empty"><i class="fas fa-triangle-exclamation"></i><p>${escapeHtmlText(readableError(error))}</p></div>`;
+        }
+      );
+    }
+
+    function renderGrid() {
+      const grid = document.getElementById("lcGrid");
+      if (!grid) return;
+
+      const query = (document.getElementById("lcSearch")?.value || "").toLowerCase();
+      const sort = document.getElementById("lcSort")?.value || "newest";
+      let entries = [...allEntries];
+
+      if (currentFilter !== "all") {
+        entries = entries.filter(entry => getFileCategory(entry.fileName || "") === currentFilter);
+      }
+
+      if (query) {
+        entries = entries.filter(entry => {
+          return [entry.title, entry.description, entry.fileName, entry.uploaderName]
+            .join(" ")
+            .toLowerCase()
+            .includes(query);
+        });
+      }
+
+      if (sort === "oldest") {
+        entries = [...entries].reverse();
+      } else if (sort === "az") {
+        entries = [...entries].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+      } else if (sort === "za") {
+        entries = [...entries].sort((a, b) => (b.title || "").localeCompare(a.title || ""));
+      }
+
+      if (!entries.length) {
+        grid.innerHTML = `
+          <div class="lc-empty">
+            <i class="fas fa-folder-open"></i>
+            <p>${query || currentFilter !== "all" ? "No resources match your search." : "No resources yet - be the first to add one."}</p>
+            ${!query && currentFilter === "all" ? '<button class="btn btn-primary btn-sm" onclick="openModal()"><i class="fas fa-plus"></i> Add First Resource</button>' : ""}
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = entries.map(entry => entryCard(entry)).join("");
+    }
+
+    function entryCard(entry) {
+      const canDelete = myData && (myData.uid === entry.uid || myData.role === "admin");
+      const style = getFileStyle(entry.fileName || "");
+      const size = entry.fileSize ? formatBytes(entry.fileSize) : "";
+
+      return `
+        <div class="lc-entry-card">
+          <div class="lc-entry-top">
+            <div class="lc-file-icon" style="background:${style.bg};color:${style.color};"><i class="${style.icon}"></i></div>
+            <div class="lc-entry-info">
+              <div class="lc-entry-title" title="${escapeHtmlText(entry.title || entry.fileName || "File")}">${escapeHtmlText(entry.title || entry.fileName || "File")}</div>
+              <div class="lc-entry-meta">
+                <span><i class="fas fa-user" style="font-size:.6rem"></i> ${escapeHtmlText(entry.uploaderName || "Unknown")}</span>
+                <span><i class="fas fa-clock" style="font-size:.6rem"></i> ${timeAgo(entry.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="lc-entry-body">
+            ${entry.description ? `<p style="font-size:.78rem;color:var(--text2);line-height:1.5;margin-bottom:8px;">${escapeHtmlText(entry.description)}</p>` : ""}
+            <div class="lc-file-chip">
+              <i class="${style.icon}" style="color:${style.color}"></i>
+              <span class="lc-file-name">${escapeHtmlText(entry.fileName || "File")}</span>
+              ${size ? `<span style="color:var(--text3);flex-shrink:0;">· ${size}</span>` : ""}
+            </div>
+          </div>
+          <div class="lc-entry-actions">
+            <a href="${escapeHtmlText(entry.fileURL)}" target="_blank" rel="noopener" class="lc-open-btn">
+              <i class="fas fa-download"></i> Download
+            </a>
+            ${canDelete ? `<button class="lc-delete-btn" title="${myData.role === "admin" ? "Admin delete" : "Delete"}" onclick="deleteEntry('${entry.id}')"><i class="fas fa-trash"></i></button>` : ""}
+          </div>
+        </div>
+      `;
+    }
+
+    function updateStats() {
+      const mine = allEntries.filter(entry => entry.uid === myData.uid);
+      document.getElementById("statTotal").textContent = allEntries.length;
+      document.getElementById("statMine").textContent = mine.length;
+      document.getElementById("statLatest").textContent = allEntries[0] ? timeAgo(allEntries[0].createdAt) : "-";
+
+      const recent = mine.slice(0, 4);
+      document.getElementById("myRecentList").innerHTML = recent.length
+        ? recent.map(entry => `
+            <div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;">
+              <i class="${getFileStyle(entry.fileName || "").icon}" style="color:${getFileStyle(entry.fileName || "").color};font-size:.78rem;width:14px;"></i>
+              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">${escapeHtmlText(entry.title || entry.fileName || "Untitled")}</span>
+            </div>
+          `).join("")
+        : "<span>Nothing uploaded yet.</span>";
+    }
+
+    function openModal() {
+      document.getElementById("lcTitle").value = "";
+      document.getElementById("lcDesc").value = "";
+      clearFiles();
+      document.getElementById("lcModal").classList.add("show");
+      setTimeout(() => document.getElementById("lcTitle").focus(), 80);
+    }
+
+    function closeModal() {
+      document.getElementById("lcModal").classList.remove("show");
+      clearFiles();
+    }
+
+    function addFiles(fileList) {
+      const incoming = Array.from(fileList || []);
+      const keyed = new Map(selectedFiles.map(file => [`${file.name}-${file.size}`, file]));
+      incoming.forEach(file => keyed.set(`${file.name}-${file.size}`, file));
+      selectedFiles = Array.from(keyed.values());
+      renderSelectedFiles();
+    }
+
+    function renderSelectedFiles() {
+      const preview = document.getElementById("sfPreview");
+      const list = document.getElementById("sfpFileList");
+      if (!preview || !list) return;
+
+      if (!selectedFiles.length) {
+        preview.classList.remove("show");
+        return;
+      }
+
+      preview.classList.add("show");
+      list.innerHTML = selectedFiles.map(file => `
+        <div class="sfp-file-item">
+          <i class="${getFileStyle(file.name).icon}" style="color:${getFileStyle(file.name).color}"></i>
+          <span>${escapeHtmlText(file.name)}</span>
+          <small>${formatBytes(file.size)}</small>
+        </div>
+      `).join("");
+    }
+
+    function clearFiles() {
+      selectedFiles = [];
+      const input = document.getElementById("lcFileInput");
+      if (input) input.value = "";
+      document.getElementById("sfPreview")?.classList.remove("show");
+      document.getElementById("uploadProgress")?.classList.remove("show");
+      const bar = document.getElementById("progBar");
+      const pct = document.getElementById("progPct");
+      if (bar) bar.style.width = "0%";
+      if (pct) pct.textContent = "0%";
+      renderSelectedFiles();
+    }
+
+    async function uploadToCloudinary(file, onProgress) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", UPLOAD_PRESET);
+
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/auto/upload`);
+        xhr.upload.onprogress = event => {
+          if (event.lengthComputable && onProgress) {
+            onProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            resolve(JSON.parse(xhr.responseText).secure_url);
+          } else {
+            reject(new Error("Upload failed. Please check the Cloudinary preset settings."));
+          }
+        };
+        xhr.onerror = () => reject(new Error("Network error during upload."));
+        xhr.send(formData);
+      });
+    }
+
+    async function submitEntry() {
+      const title = document.getElementById("lcTitle").value.trim();
+      const description = document.getElementById("lcDesc").value.trim();
+
+      if (!selectedFiles.length) {
+        toast("Please select at least one file to upload.", "error");
+        return;
+      }
+
+      const button = document.getElementById("lcSubmitBtn");
+      const progress = document.getElementById("uploadProgress");
+      const bar = document.getElementById("progBar");
+      const pct = document.getElementById("progPct");
+
+      button.disabled = true;
+      button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+      progress.classList.add("show");
+
+      try {
+        for (let index = 0; index < selectedFiles.length; index += 1) {
+          const file = selectedFiles[index];
+          const fileURL = await uploadToCloudinary(file, percent => {
+            const overall = Math.round(((index + percent / 100) / selectedFiles.length) * 100);
+            bar.style.width = `${overall}%`;
+            pct.textContent = `${overall}%`;
+          });
+
+          await db.collection("lc_entries").add({
+            title: title ? (selectedFiles.length === 1 ? title : `${title} - ${file.name}`) : file.name,
+            description,
+            fileURL,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type,
+            uid: myData.uid,
+            uploaderName: getDisplayName(myData),
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+
+        await logActivity({
+          type: "lc",
+          text: `uploaded ${selectedFiles.length} learning center file${selectedFiles.length > 1 ? "s" : ""}`,
+          user: myData
+        });
+
+        toast("Resource upload complete.", "success");
+        closeModal();
+      } catch (error) {
+        toast(readableError(error), "error");
+      } finally {
+        button.disabled = false;
+        button.innerHTML = '<i class="fas fa-upload"></i> Upload & Save';
+        progress.classList.remove("show");
+      }
+    }
+
+    async function deleteEntry(id) {
+      if (!confirm("Delete this resource entry? The remote file link will stay on Cloudinary, but the Learning Center item will be removed.")) {
+        return;
+      }
+
+      try {
+        await db.collection("lc_entries").doc(id).delete();
+        await logActivity({
+          type: "lc",
+          text: "deleted a learning center resource",
+          user: myData,
+          extra: { entryId: id }
+        });
+        toast("Resource deleted.", "info");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    function getFileCategory(name) {
+      const ext = (name.split(".").pop() || "").toLowerCase();
+      if (["pdf"].includes(ext)) return "pdf";
+      if (["doc", "docx", "odt", "rtf", "txt", "ppt", "pptx", "xls", "xlsx", "csv"].includes(ext)) return "doc";
+      if (["jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "ico"].includes(ext)) return "img";
+      if (["mp4", "mov", "avi", "mkv", "webm", "flv", "wmv", "mp3", "wav", "aac"].includes(ext)) return "video";
+      if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(ext)) return "zip";
+      if (["js", "ts", "py", "java", "c", "cpp", "cs", "html", "css", "json", "xml", "php", "go", "rb", "sh", "swift", "kt", "dart"].includes(ext)) return "code";
+      return "other";
+    }
+
+    function getFileStyle(name) {
+      const map = {
+        pdf: { icon: "fas fa-file-pdf", bg: "rgba(255,82,82,.12)", color: "#ff5252" },
+        doc: { icon: "fas fa-file-lines", bg: "rgba(92,154,255,.12)", color: "#5c9aff" },
+        img: { icon: "fas fa-image", bg: "rgba(255,171,64,.12)", color: "#ffab40" },
+        video: { icon: "fas fa-video", bg: "rgba(206,147,216,.12)", color: "#ce93d8" },
+        zip: { icon: "fas fa-file-zipper", bg: "rgba(255,171,64,.12)", color: "#ffab40" },
+        code: { icon: "fas fa-code", bg: "rgba(0,188,212,.12)", color: "#00bcd4" },
+        other: { icon: "fas fa-file", bg: "rgba(255,255,255,.06)", color: "#8892a8" }
+      };
+      return map[getFileCategory(name)] || map.other;
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes) return "0 B";
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1048576).toFixed(1)} MB`;
+    }
+  </script>
+</body>
+</html>

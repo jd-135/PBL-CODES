@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Members - BIT TeamHub</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shell.js"></script>
+  <style>
+    .member-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+    }
+
+    .member-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      transition: border-color 0.2s, transform 0.2s;
+      position: relative;
+    }
+
+    .member-card:hover {
+      border-color: var(--border2);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+
+    .member-card-top {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .member-card-top .info .name {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .member-card-top .info .email {
+      font-size: 0.72rem;
+      color: var(--text3);
+      word-break: break-all;
+    }
+
+    .pts-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .pt-chip {
+      flex: 1;
+      background: var(--bg3);
+      border-radius: 8px;
+      padding: 8px 10px;
+      text-align: center;
+    }
+
+    .pt-chip .val {
+      font-family: Syne, sans-serif;
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+
+    .pt-chip .lbl {
+      font-size: 0.62rem;
+      color: var(--text3);
+      font-weight: 500;
+    }
+
+    .pt-chip.green .val { color: var(--green); }
+    .pt-chip.blue .val { color: var(--blue); }
+
+    .member-meta {
+      font-size: 0.75rem;
+      color: var(--text2);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .admin-badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: rgba(255, 171, 64, 0.12);
+      color: var(--orange);
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 99px;
+      letter-spacing: 0.04em;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 22px;
+      align-items: center;
+    }
+
+    .filter-bar input {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 8px 16px;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      flex: 1;
+      min-width: 180px;
+      transition: border-color 0.2s;
+    }
+
+    .filter-bar input:focus { border-color: var(--green); }
+
+    .filter-tab {
+      padding: 7px 14px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text2);
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: all 0.18s;
+    }
+
+    .filter-tab.active {
+      background: var(--green-dim);
+      color: var(--green);
+      border-color: var(--green-glow);
+    }
+
+    .filter-tab:hover:not(.active) {
+      border-color: var(--border2);
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <script>
+    let allMembers = [];
+    let activeFilter = "all";
+    let searchValue = "";
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      const me = await Shell.init({ page: "members", title: "Members" });
+      if (!me) return;
+      const isAdmin = Shell._isAdmin;
+
+      const body = document.getElementById("pageBody");
+      body.innerHTML = `
+        <div class="page-header">
+          <h1>Team Members</h1>
+          <p>All active members of BIT Sathy TeamHub</p>
+        </div>
+        <div class="filter-bar">
+          <input type="text" id="searchInput" placeholder="Search by name or email...">
+          <button class="filter-tab active" data-filter="all">All</button>
+          <button class="filter-tab" data-filter="admin">Admins</button>
+          <button class="filter-tab" data-filter="member">Members</button>
+        </div>
+        <div class="member-grid" id="memberGrid"><div class="text-muted text-sm">Loading members...</div></div>
+      `;
+
+      document.getElementById("searchInput").addEventListener("input", event => {
+        searchValue = event.target.value.toLowerCase().trim();
+        renderMembers(isAdmin, me.uid);
+      });
+
+      document.querySelectorAll(".filter-tab").forEach(button => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".filter-tab").forEach(item => item.classList.remove("active"));
+          button.classList.add("active");
+          activeFilter = button.dataset.filter;
+          renderMembers(isAdmin, me.uid);
+        });
+      });
+
+      await loadMembers();
+      renderMembers(isAdmin, me.uid);
+    });
+
+    async function loadMembers() {
+      const snap = await db.collection("users").get();
+      allMembers = activeUsersOnly(snap.docs.map(doc => doc.data()))
+        .sort((a, b) => (b.activityPoints || 0) - (a.activityPoints || 0));
+    }
+
+    function getFilteredMembers() {
+      let members = [...allMembers];
+
+      if (activeFilter !== "all") {
+        members = members.filter(member => member.role === activeFilter);
+      }
+
+      if (searchValue) {
+        members = members.filter(member => {
+          const name = getDisplayName(member).toLowerCase();
+          const email = (member.email || "").toLowerCase();
+          return name.includes(searchValue) || email.includes(searchValue);
+        });
+      }
+
+      return members;
+    }
+
+    function renderMembers(isAdmin, myUid) {
+      const grid = document.getElementById("memberGrid");
+      if (!grid) return;
+
+      const members = getFilteredMembers();
+      if (!members.length) {
+        grid.innerHTML = '<div class="text-muted text-sm">No members found.</div>';
+        return;
+      }
+
+      grid.innerHTML = members.map(member => `
+        <div class="member-card">
+          ${member.role === "admin" ? '<span class="admin-badge">Admin</span>' : ""}
+          <div class="member-card-top">
+            ${avatar(member, 44)}
+            <div class="info">
+              <div class="name">${escapeHtmlText(getDisplayName(member))}</div>
+              <div class="email">${escapeHtmlText(member.email || "")}</div>
+            </div>
+          </div>
+          <div class="pts-row">
+            <div class="pt-chip green"><div class="val">${member.activityPoints || 0}</div><div class="lbl">Activity Pts</div></div>
+            <div class="pt-chip blue"><div class="val">${member.rewardPoints || 0}</div><div class="lbl">Reward Pts</div></div>
+          </div>
+          <div class="member-meta">
+            ${member.department ? `<span><i class="fas fa-building" style="font-size:.65rem"></i> ${escapeHtmlText(member.department)}</span>` : ""}
+            ${member.year ? `<span><i class="fas fa-graduation-cap" style="font-size:.65rem"></i> Year ${escapeHtmlText(member.year)}</span>` : ""}
+            ${member.skills?.length ? `<span><i class="fas fa-code" style="font-size:.65rem"></i> ${escapeHtmlText(member.skills.slice(0, 2).join(", "))}</span>` : ""}
+          </div>
+          ${isAdmin && member.uid !== myUid ? `
+            <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-sm btn-ghost" onclick="addPoints('${member.uid}','${escapeJs(getDisplayName(member))}','activity')"><i class="fas fa-bolt"></i> +Activity</button>
+              <button class="btn btn-sm btn-ghost" onclick="addPoints('${member.uid}','${escapeJs(getDisplayName(member))}','reward')"><i class="fas fa-star"></i> +Reward</button>
+              <button class="btn btn-sm ${member.role === "admin" ? "btn-danger" : "btn-ghost"}" onclick="toggleAdmin('${member.uid}','${member.role}')">
+                ${member.role === "admin" ? "Remove Admin" : "Make Admin"}
+              </button>
+              <button class="btn btn-sm btn-danger" onclick="removeMember('${member.uid}','${escapeJs(getDisplayName(member))}')">
+                <i class="fas fa-user-minus"></i> Remove
+              </button>
+            </div>
+          ` : ""}
+        </div>
+      `).join("");
+    }
+
+    async function addPoints(uid, name, type) {
+      const value = prompt(`Add ${type} points to ${name}:\n(Use a negative number to deduct)`);
+      if (value === null) return;
+
+      const amount = parseInt(value, 10);
+      if (Number.isNaN(amount)) {
+        toast("Please enter a valid number.", "error");
+        return;
+      }
+
+      const field = type === "activity" ? "activityPoints" : "rewardPoints";
+
+      try {
+        await db.collection("users").doc(uid).update({
+          [field]: firebase.firestore.FieldValue.increment(amount)
+        });
+
+        await logActivity({
+          type: "points",
+          text: `updated ${name}'s ${type} points by ${amount > 0 ? "+" : ""}${amount}`,
+          user: Shell._user,
+          extra: { targetUid: uid, pointType: type, amount }
+        });
+
+        toast(`${amount > 0 ? "+" : ""}${amount} ${type} points saved for ${name}.`, "success");
+        await loadMembers();
+        renderMembers(true, auth.currentUser.uid);
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function toggleAdmin(uid, currentRole) {
+      const newRole = currentRole === "admin" ? "member" : "admin";
+      if (!confirm(`Change this user's role to ${newRole}?`)) return;
+
+      try {
+        await db.collection("users").doc(uid).update({ role: newRole });
+        toast(`Role updated to ${newRole}.`, "success");
+        await loadMembers();
+        renderMembers(true, auth.currentUser.uid);
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function removeMember(uid, name) {
+      try {
+        const removed = await Shell.blockMember(uid, name);
+        if (!removed) return;
+        await loadMembers();
+        renderMembers(true, auth.currentUser.uid);
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    function escapeJs(value) {
+      return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    }
+  </script>
+</body>
+</html>

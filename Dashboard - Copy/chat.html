@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Group Chat - BIT TeamHub</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="shell.js"></script>
+  <style>
+    .chat-layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 0;
+      height: calc(100vh - var(--topbar-h) - 56px);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      min-height: 0;
+    }
+
+    .chat-sidebar,
+    .chat-main {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .chat-sidebar {
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+    }
+
+    .chat-sidebar-header,
+    .chat-header {
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chat-sidebar-header {
+      font-family: Syne, sans-serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 76px;
+    }
+
+    .chat-header .ch-icon {
+      width: 38px;
+      height: 38px;
+      background: var(--green-dim);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--green);
+      flex-shrink: 0;
+    }
+
+    .chat-header .ch-name {
+      font-weight: 700;
+      font-size: 0.96rem;
+    }
+
+    .chat-header .ch-sub {
+      font-size: 0.74rem;
+      color: var(--text2);
+      margin-top: 2px;
+    }
+
+    .chat-header .member-count {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--text2);
+    }
+
+    .chat-header-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .online-list,
+    .messages-wrap {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
+
+    .online-list { padding: 8px; }
+
+    .online-member {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      margin-bottom: 6px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid transparent;
+    }
+
+    .online-member:hover {
+      border-color: var(--border);
+      background: var(--bg3);
+    }
+
+    .om-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+
+    .om-status {
+      font-size: 0.68rem;
+      color: var(--text3);
+    }
+
+    .online-indicator {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--text3);
+      flex-shrink: 0;
+    }
+
+    .online-indicator.on {
+      background: var(--green);
+      box-shadow: 0 0 5px var(--green);
+    }
+
+    .messages-shell {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .messages-wrap {
+      padding: 16px 18px 90px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      scroll-behavior: smooth;
+      background: linear-gradient(180deg, rgba(255,255,255,0.01), transparent);
+    }
+
+    .chat-empty {
+      margin: auto;
+      text-align: center;
+      color: var(--text3);
+      font-size: 0.88rem;
+    }
+
+    .msg-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: flex-end;
+    }
+
+    .msg-group.mine {
+      flex-direction: row-reverse;
+      justify-content: flex-start;
+    }
+
+    .msg-meta {
+      display: flex;
+      flex-direction: column;
+      max-width: min(70%, 560px);
+      align-items: flex-start;
+    }
+
+    .msg-group.mine .msg-meta {
+      align-items: flex-end;
+    }
+
+    .msg-name {
+      font-size: 0.7rem;
+      color: var(--text3);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+
+    .msg-group.mine .msg-name {
+      display: none;
+    }
+
+    .msg-bubble {
+      background: var(--card2);
+      border-radius: 4px 16px 16px 16px;
+      padding: 8px 13px;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      word-break: break-word;
+      white-space: pre-wrap;
+      display: inline-block;
+    }
+
+    .msg-group.mine .msg-bubble {
+      background: var(--green);
+      color: #0b0e15;
+      border-radius: 16px 4px 16px 16px;
+    }
+
+    .msg-time {
+      font-size: 0.65rem;
+      color: var(--text3);
+      margin-top: 4px;
+    }
+
+    .date-divider {
+      text-align: center;
+      font-size: 0.7rem;
+      color: var(--text3);
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .date-divider::before,
+    .date-divider::after {
+      content: "";
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .scroll-latest-btn {
+      position: absolute;
+      right: 18px;
+      bottom: 88px;
+      z-index: 2;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      border-radius: 99px;
+      box-shadow: var(--shadow);
+    }
+
+    .scroll-latest-btn.show { display: inline-flex; }
+
+    .emoji-row {
+      display: flex;
+      gap: 6px;
+      padding: 0 16px 8px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.06);
+    }
+
+    .emoji-btn {
+      background: none;
+      border: none;
+      font-size: 1.1rem;
+      cursor: pointer;
+      border-radius: 6px;
+      padding: 4px 6px;
+      transition: background 0.15s;
+    }
+
+    .emoji-btn:hover { background: var(--bg3); }
+
+    .chat-input-wrap {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      background: var(--card);
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.88rem;
+      outline: none;
+      resize: none;
+      max-height: 120px;
+      min-height: 44px;
+      line-height: 1.45;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input:focus { border-color: var(--green); }
+    .chat-input::placeholder { color: var(--text3); }
+
+    .send-btn {
+      width: 42px;
+      height: 42px;
+      background: var(--green);
+      border: none;
+      border-radius: 10px;
+      color: #0b0e15;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, transform 0.1s;
+      flex-shrink: 0;
+    }
+
+    .send-btn:hover { background: var(--green2); }
+    .send-btn:active { transform: scale(0.93); }
+
+    @media (max-width: 900px) {
+      .chat-layout { grid-template-columns: 1fr; }
+      .chat-sidebar { display: none; }
+      .chat-header { flex-wrap: wrap; }
+      .chat-header .member-count { margin-left: 0; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <script>
+    let myData = null;
+    let allMessages = [];
+    let shouldAutoScroll = true;
+    let hasLoggedChatActivity = false;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      myData = await Shell.init({ page: "chat", title: "Group Chat" });
+      if (!myData) return;
+
+      renderPage();
+      await updatePresence(true);
+      bindPresenceEvents();
+      loadOnlineMembers();
+      subscribeMessages();
+      bindComposer();
+    });
+
+    function renderPage() {
+      const body = document.getElementById("pageBody");
+      body.style.padding = "0";
+      body.innerHTML = `
+        <div class="chat-layout">
+          <div class="chat-sidebar">
+            <div class="chat-sidebar-header">
+              <span><span class="dot"></span> Online Members</span>
+              <span style="font-size:.72rem;color:var(--text3);" id="onlineCount">-</span>
+            </div>
+            <div class="online-list" id="onlineList">Loading...</div>
+          </div>
+
+          <div class="chat-main">
+            <div class="chat-header">
+              <div class="ch-icon"><i class="fas fa-comments"></i></div>
+              <div>
+                <div class="ch-name"># general</div>
+                <div class="ch-sub">Shared group chat for the full BIT Sathy team.</div>
+              </div>
+              <div class="member-count" id="memberCount">-</div>
+              <div class="chat-header-actions">
+                ${Shell._isAdmin ? '<button class="btn btn-sm btn-danger" id="clearChatBtn"><i class="fas fa-trash"></i> Clear Chat</button>' : ""}
+              </div>
+            </div>
+
+            <div class="messages-shell">
+              <div class="messages-wrap" id="messagesWrap"></div>
+              <button class="btn btn-primary btn-sm scroll-latest-btn" id="scrollLatestBtn" type="button">
+                <i class="fas fa-arrow-down"></i> Latest
+              </button>
+            </div>
+
+            <div class="emoji-row">
+              ${["👍", "🎉", "🔥", "💡", "✅", "❓", "😂", "🙌"].map(emoji => `<button class="emoji-btn" onclick="insertEmoji('${emoji}')">${emoji}</button>`).join("")}
+            </div>
+
+            <div class="chat-input-wrap">
+              <textarea class="chat-input" id="chatInput" placeholder="Message #general..." rows="1"></textarea>
+              <button class="send-btn" id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("scrollLatestBtn").addEventListener("click", () => {
+        scrollToBottom(true);
+      });
+
+      if (Shell._isAdmin) {
+        document.getElementById("clearChatBtn").addEventListener("click", clearChat);
+      }
+    }
+
+    async function updatePresence(isOnline) {
+      if (!myData?.uid) return;
+      await db.collection("users").doc(myData.uid).update({
+        online: isOnline,
+        lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+
+    function bindPresenceEvents() {
+      window.addEventListener("beforeunload", () => {
+        db.collection("users").doc(myData.uid).update({
+          online: false,
+          lastSeen: firebase.firestore.FieldValue.serverTimestamp()
+        }).catch(() => {});
+      });
+
+      document.addEventListener("visibilitychange", () => {
+        updatePresence(!document.hidden);
+      });
+    }
+
+    function loadOnlineMembers() {
+      db.collection("users").onSnapshot(snap => {
+        const members = activeUsersOnly(snap.docs.map(doc => doc.data()))
+          .sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)));
+
+        const onlineMembers = members.filter(member => member.online);
+        document.getElementById("memberCount").textContent = `${members.length} active members`;
+        document.getElementById("onlineCount").textContent = `${onlineMembers.length} online`;
+
+        const list = document.getElementById("onlineList");
+        if (!list) return;
+
+        list.innerHTML = members.map(member => `
+          <div class="online-member">
+            ${avatar(member, 32)}
+            <div style="min-width:0;flex:1;">
+              <div class="om-name">${escapeHtmlText(getDisplayName(member))}</div>
+              <div class="om-status">${member.role === "admin" ? "Admin" : "Member"}</div>
+            </div>
+            <div class="online-indicator ${member.online ? "on" : ""}"></div>
+            ${Shell._isAdmin && member.uid !== myData.uid ? `<button class="btn btn-sm btn-danger" onclick="removeFromChat('${member.uid}','${escapeJs(getDisplayName(member))}')"><i class="fas fa-user-minus"></i></button>` : ""}
+          </div>
+        `).join("");
+      });
+    }
+
+    function subscribeMessages() {
+      const wrap = document.getElementById("messagesWrap");
+      wrap.addEventListener("scroll", handleScrollState);
+
+      db.collection("chat_messages").onSnapshot(
+        snap => {
+          const messages = sortByCreatedAtAsc(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })))
+            .slice(-300);
+
+          const nearBottomBeforeRender = isNearBottom();
+          allMessages = messages;
+          renderMessages();
+
+          if (shouldAutoScroll || nearBottomBeforeRender) {
+            scrollToBottom(false);
+          }
+          toggleScrollButton();
+        },
+        error => {
+          wrap.innerHTML = `<div class="chat-empty">${escapeHtmlText(readableError(error))}</div>`;
+        }
+      );
+    }
+
+    function renderMessages() {
+      const wrap = document.getElementById("messagesWrap");
+      if (!wrap) return;
+
+      if (!allMessages.length) {
+        wrap.innerHTML = '<div class="chat-empty"><i class="fas fa-comments" style="display:block;font-size:2rem;margin-bottom:12px;"></i>No messages yet. Start the conversation.</div>';
+        return;
+      }
+
+      let lastDate = "";
+      wrap.innerHTML = allMessages.map(message => {
+        const createdDate = toDateValue(message.createdAt) || new Date();
+        const dateLabel = createdDate.toLocaleDateString("en-IN", { dateStyle: "medium" });
+        const mine = message.uid === myData.uid;
+        const divider = dateLabel !== lastDate ? `<div class="date-divider">${dateLabel}</div>` : "";
+        lastDate = dateLabel;
+
+        return `
+          ${divider}
+          <div class="msg-group ${mine ? "mine" : ""}">
+            ${mine ? "" : avatar(message, 32)}
+            <div class="msg-meta">
+              ${mine ? "" : `<span class="msg-name">${escapeHtmlText(getDisplayName(message))}${message.role === "admin" ? " · Admin" : ""}</span>`}
+              <div class="msg-bubble">${escapeHtmlText(message.text || "").replace(/\n/g, "<br>")}</div>
+              <div class="msg-time">${createdDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function bindComposer() {
+      const input = document.getElementById("chatInput");
+      const button = document.getElementById("sendBtn");
+
+      input.addEventListener("keydown", event => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          sendMessage();
+        }
+      });
+
+      input.addEventListener("input", () => {
+        input.style.height = "auto";
+        input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
+      });
+
+      button.addEventListener("click", sendMessage);
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("chatInput");
+      const text = input.value.trim();
+      if (!text) return;
+
+      const original = text;
+      input.value = "";
+      input.style.height = "auto";
+      shouldAutoScroll = true;
+
+      try {
+        await db.collection("chat_messages").add({
+          text,
+          uid: myData.uid,
+          displayName: getDisplayName(myData),
+          photoURL: myData.photoURL || "",
+          role: myData.role,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        if (!hasLoggedChatActivity) {
+          hasLoggedChatActivity = true;
+          await logActivity({
+            type: "chat",
+            text: "sent a message in group chat",
+            user: myData
+          });
+        }
+      } catch (error) {
+        input.value = original;
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function clearChat() {
+      if (!confirm("Clear the entire group chat for everyone?")) return;
+
+      try {
+        const snap = await db.collection("chat_messages").get();
+        for (let index = 0; index < snap.docs.length; index += 350) {
+          const batch = db.batch();
+          snap.docs.slice(index, index + 350).forEach(doc => batch.delete(doc.ref));
+          await batch.commit();
+        }
+
+        await logActivity({
+          type: "chat",
+          text: "cleared the group chat",
+          user: myData
+        });
+
+        toast("Group chat cleared.", "info");
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    async function removeFromChat(uid, name) {
+      try {
+        await Shell.blockMember(uid, name);
+      } catch (error) {
+        toast(readableError(error), "error");
+      }
+    }
+
+    function insertEmoji(emoji) {
+      const input = document.getElementById("chatInput");
+      if (!input) return;
+      input.value += emoji;
+      input.focus();
+      input.dispatchEvent(new Event("input"));
+    }
+
+    function handleScrollState() {
+      shouldAutoScroll = isNearBottom();
+      toggleScrollButton();
+    }
+
+    function isNearBottom() {
+      const wrap = document.getElementById("messagesWrap");
+      if (!wrap) return true;
+      return wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight < 80;
+    }
+
+    function scrollToBottom(smooth) {
+      const wrap = document.getElementById("messagesWrap");
+      if (!wrap) return;
+      wrap.scrollTo({
+        top: wrap.scrollHeight,
+        behavior: smooth ? "smooth" : "auto"
+      });
+      shouldAutoScroll = true;
+      toggleScrollButton();
+    }
+
+    function toggleScrollButton() {
+      const button = document.getElementById("scrollLatestBtn");
+      if (!button) return;
+      button.classList.toggle("show", !isNearBottom());
+    }
+
+    function escapeJs(value) {
+      return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+    }
+  </script>
+</body>
+</html>
